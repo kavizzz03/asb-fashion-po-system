@@ -1,0 +1,24 @@
+// inside the AJAX handling block, after the start
+if (isset($_GET['ajax_action'])) {
+    // ...
+    switch ($action) {
+        // ... existing cases ...
+        case 'get_po_suggestions':
+            $search = isset($_GET['search']) ? trim($_GET['search']) : '';
+            $sql = "SELECT po_id AS id, po_number AS text FROM po_header";
+            if (!empty($search)) {
+                $sql .= " WHERE po_number LIKE ?";
+                $like = "%$search%";
+                $stmt = $conn->prepare($sql . " ORDER BY po_number LIMIT 20");
+                $stmt->bind_param("s", $like);
+            } else {
+                $stmt = $conn->prepare($sql . " ORDER BY po_number LIMIT 20");
+            }
+            $stmt->execute();
+            $results = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            echo json_encode(['results' => $results, 'pagination' => ['more' => false]]);
+            exit;
+            break;
+        // ... other cases ...
+    }
+}
