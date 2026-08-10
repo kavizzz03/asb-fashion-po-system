@@ -188,24 +188,33 @@ if (isset($_GET['ajax_action'])) {
 
             case 'get_name_suggestions':
                 $department_id = isset($_GET['department_id']) ? (int)$_GET['department_id'] : 0;
-                $sql = "SELECT suggestion_id AS id, suggested_name AS text FROM item_name_suggestions";
-                $count_sql = "SELECT COUNT(*) AS total FROM item_name_suggestions";
+                $sql = "SELECT 
+                            s.suggestion_id AS id, 
+                            s.suggested_name AS text,
+                            s.department_id,
+                            s.sub_department_id,
+                            d.department_name,
+                            sd.sub_department_name
+                        FROM item_name_suggestions s
+                        LEFT JOIN departments d ON s.department_id = d.department_id
+                        LEFT JOIN sub_departments sd ON s.sub_department_id = sd.sub_department_id";
+                $count_sql = "SELECT COUNT(*) AS total FROM item_name_suggestions s";
                 $where = [];
                 $params = [];
                 $types = "";
                 if ($department_id > 0) {
-                    $where[] = "department_id = ?";
+                    $where[] = "s.department_id = ?";
                     $params[] = $department_id;
                     $types .= "i";
                 }
                 if (!empty($search)) {
-                    $where[] = "suggested_name LIKE ?";
+                    $where[] = "s.suggested_name LIKE ?";
                     $like = "%$search%";
                     $params[] = $like;
                     $types .= "s";
                 }
                 $where_clause = empty($where) ? "" : " WHERE " . implode(" AND ", $where);
-                $stmt = $conn->prepare($sql . $where_clause . " ORDER BY suggested_name LIMIT ? OFFSET ?");
+                $stmt = $conn->prepare($sql . $where_clause . " ORDER BY s.suggested_name LIMIT ? OFFSET ?");
                 $count_stmt = $conn->prepare($count_sql . $where_clause);
                 $bind_params = array_merge($params, [$per_page, $offset]);
                 $types_final = $types . "ii";
@@ -943,7 +952,7 @@ $(document).ready(function() {
             });
         });
 
-        // Name suggestion (from item_name_suggestions, filtered by department)
+        // Name suggestion – now sets department and sub-department
         function refreshSuggestions() {
             var deptId = $deptSelect.val() || '';
             $suggestionSelect.select2({
@@ -976,7 +985,19 @@ $(document).ready(function() {
             }).on('select2:select', function(e) {
                 var data = e.params.data;
                 var $row = $(this).closest('tr');
+                // Set item name
                 $row.find('.item_name_input').val(data.text);
+                // Set department and sub-department if available
+                if (data.department_id) {
+                    setSelectValue($row.find('.dept-select'), data.department_id, data.department_name);
+                } else {
+                    $row.find('.dept-select').val(null).trigger('change');
+                }
+                if (data.sub_department_id) {
+                    setSelectValue($row.find('.subdept-select'), data.sub_department_id, data.sub_department_name);
+                } else {
+                    $row.find('.subdept-select').val(null).trigger('change');
+                }
             });
             $suggestionSelect.val(null).trigger('change');
         }
@@ -1138,7 +1159,7 @@ $(document).ready(function() {
         .then(data => {
             if (data.success) {
                 alert(data.message);
-                window.location.href = 'view_pos.php';
+                window.location.href = 'pos.php';
             } else {
                 $('#modalError').text(data.message);
             }

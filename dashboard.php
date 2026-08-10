@@ -9,40 +9,24 @@ requireLogin();
 $page_title = 'ASB Group · Dashboard';
 $page = 'dashboard';
 
-// Get database connections using MySQLi
-$conn = getConnection();      // PO database (contains po_users, po_login_logs)
-$qcConn = getQcConnection();  // QC database (suppliers)
+$isReceived = isReceivedUser();
 
-// Initialize stats
+// Only fetch stats if not received (to save queries)
 $totalSuppliers = 0;
 $totalPOs = 0;
+$pendingPOs = 0;
 $totalItems = 0;
 $totalUsers = 0;
 $totalLogins = 0;
 
-// Count suppliers from return_qc
-if ($qcConn) {
-    $result = $qcConn->query("SELECT COUNT(*) FROM suppliers");
-    if ($result) {
-        $totalSuppliers = (int) $result->fetch_row()[0];
-        $result->free();
-    }
-}
+if (!$isReceived) {
+    $totalSuppliers = getTotalSuppliers();
+    $totalPOs       = getTotalPOs();
+    $pendingPOs     = getPendingPOs();
+    $totalItems     = getTotalItems();
 
-// Count POs and items from po_system
-if ($conn) {
-    $result = $conn->query("SELECT COUNT(*) FROM purchase_orders");
-    if ($result) {
-        $totalPOs = (int) $result->fetch_row()[0];
-        $result->free();
-    }
-    $result = $conn->query("SELECT COUNT(*) FROM purchase_order_items");
-    if ($result) {
-        $totalItems = (int) $result->fetch_row()[0];
-        $result->free();
-    }
-
-    // Count total users
+    // Total users – we need to query directly as no helper exists
+    $conn = getConnection();
     try {
         $result = $conn->query("SELECT COUNT(*) FROM po_users");
         if ($result) {
@@ -50,13 +34,12 @@ if ($conn) {
             $result->free();
         }
     } catch (Exception $e) {
-        // ignore (table might not exist yet)
+        // ignore
     }
 
-    // Count total logins (only for admin)
     if (isAdmin()) {
         try {
-            $totalLogins = countLoginLogs(); // uses the optimized function
+            $totalLogins = countLoginLogs();
         } catch (Exception $e) {
             // ignore
         }
@@ -257,6 +240,42 @@ include ROOT_PATH . 'includes/sidebar.php';
         font-weight: 500;
     }
 
+    /* GRN section */
+    .grn-section {
+        margin-top: 30px;
+    }
+    .grn-section h4 {
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .grn-section h4 i {
+        color: #b91c1c;
+    }
+    .grn-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    /* For received user: make the GRN section the main content */
+    .main-grn {
+        margin-top: 0;
+    }
+    .main-grn h2 {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #0f172a;
+    }
+    .main-grn .grn-grid {
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        max-width: 700px;
+        margin: 0 auto;
+    }
+
     @media (max-width: 768px) {
         .hero-slider { height: 240px; }
         .hero-slider .slide .overlay h2 { font-size: 1.6rem; }
@@ -274,142 +293,214 @@ include ROOT_PATH . 'includes/sidebar.php';
     <!-- ===== HERO SLIDESHOW ===== -->
     <div class="hero-slider" id="heroSlider">
         <div class="slides" id="slidesContainer">
-            <!-- Slide 1 -->
-            <div class="slide active" style="background-image: url('https://picsum.photos/seed/fashion1/1200/500');">
-                <div class="overlay">
-                    <h2>Welcome to ASB Group</h2>
-                    <p>Streamline your purchase orders, allocations, and supplier management – all in one place.</p>
-                    <a href="create_po.php" class="btn-white"><i class="fas fa-plus-circle"></i> Create New PO</a>
+            <?php if (!$isReceived): ?>
+                <!-- Normal slides for admin/user -->
+                <div class="slide active" style="background-image: url('https://picsum.photos/seed/fashion1/1200/500');">
+                    <div class="overlay">
+                        <h2>Welcome to ASB Group</h2>
+                        <p>Streamline your purchase orders, allocations, and supplier management – all in one place.</p>
+                        <a href="create_po.php" class="btn-white"><i class="fas fa-plus-circle"></i> Create New PO</a>
+                    </div>
                 </div>
-            </div>
-            <!-- Slide 2 -->
-            <div class="slide" style="background-image: url('https://picsum.photos/seed/fashion2/1200/500');">
-                <div class="overlay">
-                    <h2>Supplier Control</h2>
-                    <p>Manage all your suppliers efficiently – add, edit, and track every vendor.</p>
-                    <a href="supplier_module.php" class="btn-white"><i class="fas fa-truck"></i> View Suppliers</a>
+                <div class="slide" style="background-image: url('https://picsum.photos/seed/fashion2/1200/500');">
+                    <div class="overlay">
+                        <h2>Supplier Control</h2>
+                        <p>Manage all your suppliers efficiently – add, edit, and track every vendor.</p>
+                        <a href="supplier_module.php" class="btn-white"><i class="fas fa-truck"></i> View Suppliers</a>
+                    </div>
                 </div>
-            </div>
-            <!-- Slide 3 -->
-            <div class="slide" style="background-image: url('https://picsum.photos/seed/fashion3/1200/500');">
-                <div class="overlay">
-                    <h2>Smart Allocations</h2>
-                    <p>Distribute PO items to branches with ease and generate printable reports.</p>
-                    <a href="allocate_po.php" class="btn-white"><i class="fas fa-tasks"></i> Go to Allocations</a>
+                <div class="slide" style="background-image: url('https://picsum.photos/seed/fashion3/1200/500');">
+                    <div class="overlay">
+                        <h2>Smart Allocations</h2>
+                        <p>Distribute PO items to branches with ease and generate printable reports.</p>
+                        <a href="allocate_po.php" class="btn-white"><i class="fas fa-tasks"></i> Go to Allocations</a>
+                    </div>
                 </div>
-            </div>
+            <?php else: ?>
+                <!-- Slides for received user (GRN focused) -->
+                <div class="slide active" style="background-image: url('https://picsum.photos/seed/grn1/1200/500');">
+                    <div class="overlay">
+                        <h2>Goods Receipt Notes</h2>
+                        <p>Receive purchase orders and create GRN notes efficiently.</p>
+                        <a href="receive_po_dashboard.php" class="btn-white"><i class="fas fa-arrow-down"></i> Receive PO</a>
+                    </div>
+                </div>
+                <div class="slide" style="background-image: url('https://picsum.photos/seed/grn2/1200/500');">
+                    <div class="overlay">
+                        <h2>GRN Print & View</h2>
+                        <p>View and print all Goods Receipt Notes for your records.</p>
+                        <a href="view_pos.php" class="btn-white"><i class="fas fa-print"></i> Print GRN</a>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
         <!-- Dots -->
         <div class="slider-dots" id="sliderDots">
-            <button class="dot active" data-index="0"></button>
-            <button class="dot" data-index="1"></button>
-            <button class="dot" data-index="2"></button>
+            <?php
+            $totalSlides = $isReceived ? 2 : 3;
+            for ($i = 0; $i < $totalSlides; $i++):
+            ?>
+                <button class="dot <?php echo $i === 0 ? 'active' : ''; ?>" data-index="<?php echo $i; ?>"></button>
+            <?php endfor; ?>
         </div>
     </div>
 
-    <!-- ===== KEY STATS ===== -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
-            <div class="stat-number"><?php echo number_format($totalPOs); ?></div>
-            <div class="stat-label">Total Purchase Orders</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon"><i class="fas fa-truck"></i></div>
-            <div class="stat-number"><?php echo number_format($totalSuppliers); ?></div>
-            <div class="stat-label">Active Suppliers</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon"><i class="fas fa-boxes"></i></div>
-            <div class="stat-number"><?php echo number_format($totalItems); ?></div>
-            <div class="stat-label">PO Items</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon"><i class="fas fa-users"></i></div>
-            <div class="stat-number"><?php echo number_format($totalUsers); ?></div>
-            <div class="stat-label">Registered Users</div>
-        </div>
-
-        <!-- Total Logins (admin only) -->
-        <?php if (isAdmin()): ?>
+    <?php if (!$isReceived): ?>
+        <!-- ===== KEY STATS (only for admin/user) ===== -->
+        <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon"><i class="fas fa-history"></i></div>
-                <div class="stat-number"><?php echo number_format($totalLogins); ?></div>
-                <div class="stat-label">Total Logins</div>
+                <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
+                <div class="stat-number"><?php echo number_format($totalPOs); ?></div>
+                <div class="stat-label">Total Purchase Orders</div>
             </div>
-        <?php endif; ?>
-    </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
+                <div class="stat-number"><?php echo number_format($pendingPOs); ?></div>
+                <div class="stat-label">Pending POs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-truck"></i></div>
+                <div class="stat-number"><?php echo number_format($totalSuppliers); ?></div>
+                <div class="stat-label">Active Suppliers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                <div class="stat-number"><?php echo number_format($totalItems); ?></div>
+                <div class="stat-label">PO Items</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-users"></i></div>
+                <div class="stat-number"><?php echo number_format($totalUsers); ?></div>
+                <div class="stat-label">Registered Users</div>
+            </div>
+            <?php if (isAdmin()): ?>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-history"></i></div>
+                    <div class="stat-number"><?php echo number_format($totalLogins); ?></div>
+                    <div class="stat-label">Total Logins</div>
+                </div>
+            <?php endif; ?>
+        </div>
 
-    <!-- ===== DASHBOARD ACTION CARDS ===== -->
-    <div class="dashboard-grid">
-        <a href="create_po.php" class="dashboard-card">
-            <div class="icon"><i class="fas fa-plus-circle"></i></div>
-            <h3>Create Purchase Order</h3>
-            <p>Start a new PO with items & suppliers</p>
-        </a>
-
-        <a href="edit_po.php" class="dashboard-card">
-            <div class="icon"><i class="fas fa-edit"></i></div>
-            <h3>Edit Purchase Order</h3>
-            <p>Search and modify existing POs</p>
-        </a>
-
-        <a href="allocate_po.php" class="dashboard-card">
-            <div class="icon"><i class="fas fa-tasks"></i></div>
-            <h3>Quantity Allocations</h3>
-            <p>Allocate PO items to branches</p>
-        </a>
-
-        <a href="allocation_summary.php" class="dashboard-card">
-            <div class="icon"><i class="fas fa-print"></i></div>
-            <h3>Allocation Report</h3>
-            <p>View and print allocation reports</p>
-        </a>
-
-        <a href="pos.php" class="dashboard-card" style="border-top-color: #2c3e50;">
-            <div class="icon" style="color:#2c3e50;"><i class="fas fa-file-pdf"></i></div>
-            <h3>Print Reports</h3>
-            <p>Generate printable PO reports</p>
-        </a>
-
-        <a href="supplier_module.php" class="dashboard-card" style="border-top-color: #1976d2;">
-            <div class="icon" style="color:#1976d2;"><i class="fas fa-truck"></i></div>
-            <h3>Supplier Management</h3>
-            <p>Add, edit, or view supplier details</p>
-        </a>
-
-        <!-- Admin-only cards -->
-        <?php if (isAdmin()): ?>
-            <a href="user_management.php" class="dashboard-card" style="border-top-color: #6c5ce7;">
-                <div class="icon" style="color:#6c5ce7;"><i class="fas fa-users-cog"></i></div>
-                <h3>User Management</h3>
-                <p>Add, edit, or delete system users</p>
+        <!-- ===== DASHBOARD ACTION CARDS (for admin/user) ===== -->
+        <div class="dashboard-grid">
+            <a href="create_po.php" class="dashboard-card">
+                <div class="icon"><i class="fas fa-plus-circle"></i></div>
+                <h3>Create Purchase Order</h3>
+                <p>Start a new PO with items & suppliers</p>
             </a>
 
-            <a href="login_logs.php" class="dashboard-card" style="border-top-color: #e67e22;">
-                <div class="icon" style="color:#e67e22;"><i class="fas fa-history"></i></div>
-                <h3>User Log History</h3>
-                <p>View full system login history logs</p>
+            <a href="edit_po.php" class="dashboard-card">
+                <div class="icon"><i class="fas fa-edit"></i></div>
+                <h3>Edit Purchase Order</h3>
+                <p>Search and modify existing POs</p>
             </a>
 
-            <!-- NEW: Companies & Store Locations -->
-            <a href="companies.php" class="dashboard-card" style="border-top-color: #17a2b8;">
-                <div class="icon" style="color:#17a2b8;"><i class="fas fa-building"></i></div>
-                <h3>Companies</h3>
-                <p>Manage companies</p>
+            <a href="allocate_po.php" class="dashboard-card">
+                <div class="icon"><i class="fas fa-tasks"></i></div>
+                <h3>Quantity Allocations</h3>
+                <p>Allocate PO items to branches</p>
             </a>
 
-            <a href="locations.php" class="dashboard-card" style="border-top-color: #28a745;">
-                <div class="icon" style="color:#28a745;"><i class="fas fa-store"></i></div>
-                <h3>Store Locations</h3>
-                <p>Manage locations per company</p>
+            <!-- ===== NEW CARD: Quick Qty Allocation ===== -->
+            <a href="quick_allocation.php" class="dashboard-card" style="border-top-color: #e67e22;">
+                <div class="icon" style="color:#e67e22;"><i class="fas fa-bolt"></i></div>
+                <h3>Quick Qty Allocation</h3>
+                <p>Fast allocate with preset company splits</p>
             </a>
-        <?php endif; ?>
-    </div>
+
+            <a href="allocation_summary.php" class="dashboard-card">
+                <div class="icon"><i class="fas fa-print"></i></div>
+                <h3>Allocation Report</h3>
+                <p>View and print allocation reports</p>
+            </a>
+
+            <a href="pos.php" class="dashboard-card" style="border-top-color: #2c3e50;">
+                <div class="icon" style="color:#2c3e50;"><i class="fas fa-file-pdf"></i></div>
+                <h3>Print Reports</h3>
+                <p>Generate printable PO reports</p>
+            </a>
+
+            <!-- ===== NEW CARD: PO Summary Report ===== -->
+            <a href="po_summary_report.php" class="dashboard-card" style="border-top-color: #8b5cf6;">
+                <div class="icon" style="color:#8b5cf6;"><i class="fas fa-chart-pie"></i></div>
+                <h3>PO Summary Report</h3>
+                <p>Analytical overview with charts &amp; print</p>
+            </a>
+
+            <a href="supplier_module.php" class="dashboard-card" style="border-top-color: #1976d2;">
+                <div class="icon" style="color:#1976d2;"><i class="fas fa-truck"></i></div>
+                <h3>Supplier Management</h3>
+                <p>Add, edit, or view supplier details</p>
+            </a>
+
+            <!-- Admin-only cards -->
+            <?php if (isAdmin()): ?>
+                <a href="user_management.php" class="dashboard-card" style="border-top-color: #6c5ce7;">
+                    <div class="icon" style="color:#6c5ce7;"><i class="fas fa-users-cog"></i></div>
+                    <h3>User Management</h3>
+                    <p>Add, edit, or delete system users</p>
+                </a>
+
+                <a href="login_logs.php" class="dashboard-card" style="border-top-color: #e67e22;">
+                    <div class="icon" style="color:#e67e22;"><i class="fas fa-history"></i></div>
+                    <h3>User Log History</h3>
+                    <p>View full system login history logs</p>
+                </a>
+
+                <a href="companies.php" class="dashboard-card" style="border-top-color: #17a2b8;">
+                    <div class="icon" style="color:#17a2b8;"><i class="fas fa-building"></i></div>
+                    <h3>Companies</h3>
+                    <p>Manage companies</p>
+                </a>
+
+                <a href="locations.php" class="dashboard-card" style="border-top-color: #28a745;">
+                    <div class="icon" style="color:#28a745;"><i class="fas fa-store"></i></div>
+                    <h3>Store Locations</h3>
+                    <p>Manage locations per company</p>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <!-- ===== GRN ACTIONS (for admin/user as well) ===== -->
+        <div class="grn-section">
+            <h4><i class="fas fa-clipboard-list"></i> Goods Receipt Notes (GRN)</h4>
+            <div class="grn-grid">
+                <a href="receive_po_dashboard.php" class="dashboard-card" style="border-top-color: #0d9488;">
+                    <div class="icon" style="color:#0d9488;"><i class="fas fa-arrow-down"></i></div>
+                    <h3>Receive PO</h3>
+                    <p>Create GRN for incoming orders</p>
+                </a>
+                <a href="view_pos.php" class="dashboard-card" style="border-top-color: #2563eb;">
+                    <div class="icon" style="color:#2563eb;"><i class="fas fa-print"></i></div>
+                    <h3>GRN Note Print</h3>
+                    <p>View and print GRN reports</p>
+                </a>
+            </div>
+        </div>
+
+    <?php else: ?>
+        <!-- ===== MAIN GRN SECTION FOR RECEIVED USER ===== -->
+        <div class="main-grn">
+            <h2>Goods Receipt Notes</h2>
+            <div class="grn-grid">
+                <a href="receive_po_dashboard.php" class="dashboard-card" style="border-top-color: #0d9488;">
+                    <div class="icon" style="color:#0d9488;"><i class="fas fa-arrow-down"></i></div>
+                    <h3>Receive PO</h3>
+                    <p>Create GRN for incoming orders</p>
+                </a>
+                <a href="view_pos.php" class="dashboard-card" style="border-top-color: #2563eb;">
+                    <div class="icon" style="color:#2563eb;"><i class="fas fa-print"></i></div>
+                    <h3>GRN Note Print</h3>
+                    <p>View and print GRN reports</p>
+                </a>
+            </div>
+        </div>
+    <?php endif; ?>
 
 </div>
 
-<!-- ===== SLIDER SCRIPT (Smooth Fade + Slide) ===== -->
+<!-- ===== SLIDER SCRIPT ===== -->
 <script>
     (function() {
         const slidesContainer = document.getElementById('slidesContainer');
@@ -424,15 +515,12 @@ include ROOT_PATH . 'includes/sidebar.php';
             if (index >= totalSlides) index = 0;
             currentIndex = index;
 
-            // Move the container horizontally (slide effect)
             slidesContainer.style.transform = `translateX(-${currentIndex * 100}%)`;
 
-            // Toggle active class for opacity (fade effect)
             slides.forEach((slide, i) => {
                 slide.classList.toggle('active', i === currentIndex);
             });
 
-            // Update dots
             dots.forEach((dot, i) => {
                 dot.classList.toggle('active', i === currentIndex);
             });
@@ -450,22 +538,19 @@ include ROOT_PATH . 'includes/sidebar.php';
             clearInterval(interval);
         }
 
-        // Dot click
         dots.forEach(dot => {
             dot.addEventListener('click', function() {
                 const index = parseInt(this.dataset.index);
                 goToSlide(index);
                 stopSlider();
-                startSlider(); // reset timer
+                startSlider();
             });
         });
 
-        // Pause on hover
         const slider = document.getElementById('heroSlider');
         slider.addEventListener('mouseenter', stopSlider);
         slider.addEventListener('mouseleave', startSlider);
 
-        // Start auto-play
         startSlider();
     })();
 </script>

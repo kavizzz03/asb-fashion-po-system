@@ -27,7 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = isset($_POST['password']) ? trim($_POST['password']) : '';
             $userId = isset($_POST['user_id']) ? (int)$_POST['user_id'] : 0;
 
-            if (empty($username) || !in_array($role, ['admin', 'user'])) {
+            // Updated role validation to include 'received'
+            if (empty($username) || !in_array($role, ['admin', 'user', 'received'])) {
                 $message = 'Invalid input.';
             } else {
                 if ($action === 'add') {
@@ -91,8 +92,17 @@ $result->free();
     .user-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); border-left: 5px solid #b71c1c; transition: 0.3s; }
     .user-card:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
     .user-card .username { font-weight: 700; font-size: 18px; color: #1a1a1a; }
-    .user-card .role { display: inline-block; background: #b71c1c; color: white; padding: 2px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .user-card .role {
+        display: inline-block;
+        color: white;
+        padding: 2px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .user-card .role.admin { background: #b71c1c; }
     .user-card .role.user { background: #2c3e50; }
+    .user-card .role.received { background: #0d9488; }  /* teal for received */
     .user-card .meta { font-size: 13px; color: #888; margin: 8px 0; }
     .user-card .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
     .user-card .actions .btn { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; transition: 0.2s; }
@@ -127,7 +137,7 @@ $result->free();
         <?php foreach ($users as $user): ?>
             <div class="user-card">
                 <div class="username"><i class="fas fa-user-circle" style="color:#b71c1c;"></i> <?php echo htmlspecialchars($user['username']); ?></div>
-                <div><span class="role <?php echo $user['role'] === 'admin' ? '' : 'user'; ?>"><?php echo ucfirst($user['role']); ?></span></div>
+                <div><span class="role <?php echo htmlspecialchars($user['role']); ?>"><?php echo ucfirst($user['role']); ?></span></div>
                 <div class="meta">Created: <?php echo date('Y-m-d H:i', strtotime($user['created_at'])); ?></div>
                 <div class="meta">Last Login: <?php echo $user['last_login'] ? date('Y-m-d H:i', strtotime($user['last_login'])) : 'Never'; ?></div>
                 <div class="actions">
@@ -157,6 +167,7 @@ $result->free();
                 <select name="role" id="formRole">
                     <option value="user">User</option>
                     <option value="admin">Admin</option>
+                    <option value="received">Received (GRN only)</option>
                 </select>
             </div>
             <div class="form-group">

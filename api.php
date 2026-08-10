@@ -140,24 +140,39 @@ switch ($action) {
         }
         break;
 
-    // ==================== Get PO details ====================
+    // ==================== Get PO details (UPDATED: includes item_code and system_code) ====================
     case 'getPO':
         $poId = (int)($_GET['po_id'] ?? 0);
-        if (!$poId) { echo json_encode(['error' => 'PO ID required']); break; }
+        if (!$poId) { 
+            echo json_encode(['error' => 'PO ID required']); 
+            break; 
+        }
         $po = $conn->query("SELECT h.*, s.supplier_name FROM po_header h LEFT JOIN " . DB_QC . ".suppliers s ON h.supplier_id = s.supplier_id WHERE h.po_id = $poId")->fetch_assoc();
-        if (!$po) { echo json_encode(['error' => 'PO not found']); break; }
+        if (!$po) { 
+            echo json_encode(['error' => 'PO not found']); 
+            break; 
+        }
         $items = [];
-        $res = $conn->query("SELECT pi.*, i.item_name FROM po_items pi JOIN items i ON pi.item_id = i.item_id WHERE pi.po_id = $poId");
-        while ($row = $res->fetch_assoc()) $items[] = $row;
+        // --- FIX: added i.item_code and i.system_code ---
+        $res = $conn->query("SELECT pi.*, i.item_name, i.item_code, i.system_code FROM po_items pi JOIN items i ON pi.item_id = i.item_id WHERE pi.po_id = $poId");
+        while ($row = $res->fetch_assoc()) {
+            $items[] = $row;
+        }
         echo json_encode(array_merge($po, ['items' => $items]));
         break;
 
     // ==================== Receive PO ====================
     case 'receivePO':
         $poId = (int)($_POST['po_id'] ?? 0);
-        if (!$poId) { echo json_encode(['success' => false, 'message' => 'PO ID missing']); break; }
+        if (!$poId) { 
+            echo json_encode(['success' => false, 'message' => 'PO ID missing']); 
+            break; 
+        }
         $received = $_POST['received'] ?? [];
-        if (empty($received)) { echo json_encode(['success' => false, 'message' => 'No quantities provided']); break; }
+        if (empty($received)) { 
+            echo json_encode(['success' => false, 'message' => 'No quantities provided']); 
+            break; 
+        }
         $conn->begin_transaction();
         try {
             foreach ($received as $poItemId => $qty) {
@@ -178,7 +193,10 @@ switch ($action) {
     // ==================== Cancel PO ====================
     case 'cancelPO':
         $poId = (int)($_POST['po_id'] ?? 0);
-        if (!$poId) { echo json_encode(['success' => false, 'message' => 'PO ID missing']); break; }
+        if (!$poId) { 
+            echo json_encode(['success' => false, 'message' => 'PO ID missing']); 
+            break; 
+        }
         $conn->query("UPDATE po_header SET status = 'Cancelled' WHERE po_id = $poId");
         echo json_encode(['success' => $conn->affected_rows > 0]);
         break;

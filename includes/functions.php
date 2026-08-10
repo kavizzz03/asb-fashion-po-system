@@ -69,6 +69,18 @@ function isAdmin() {
     return $role === 'admin';
 }
 
+/**
+ * Check if current logged-in user is a "received" user (GRN only)
+ */
+function isReceivedUser() {
+    if (!isset($_SESSION['user_id'])) return false;
+    static $role = null;
+    if ($role === null) {
+        $role = getUserRole($_SESSION['user_id']);
+    }
+    return $role === 'received';
+}
+
 // Authenticate using plain text password from po_users
 function authenticate($username, $password) {
     $conn = getConnection(); // defined in config/database.php
