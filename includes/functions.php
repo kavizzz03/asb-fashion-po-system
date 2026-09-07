@@ -350,68 +350,126 @@ function getPOById($poId) {
 }
 
 // ============================================================
-// STATISTICS
+// STATISTICS - UPDATED WITH ERROR HANDLING
 // ============================================================
 
 function getPOStats() {
     $conn = getConnection();
-    $res = $conn->query("SELECT status, COUNT(*) as count FROM po_header GROUP BY status");
-    $stats = ['total' => 0, 'pending' => 0, 'received' => 0, 'completed' => 0, 'cancelled' => 0];
-    while ($row = $res->fetch_assoc()) {
-        $key = strtolower($row['status']);
-        if (isset($stats[$key])) $stats[$key] = (int)$row['count'];
-        $stats['total'] += (int)$row['count'];
+    try {
+        $res = $conn->query("SELECT status, COUNT(*) as count FROM po_header GROUP BY status");
+        if ($res === false) {
+            throw new Exception($conn->error);
+        }
+        $stats = ['total' => 0, 'pending' => 0, 'received' => 0, 'completed' => 0, 'cancelled' => 0];
+        while ($row = $res->fetch_assoc()) {
+            $key = strtolower($row['status']);
+            if (isset($stats[$key])) $stats[$key] = (int)$row['count'];
+            $stats['total'] += (int)$row['count'];
+        }
+        return $stats;
+    } catch (Exception $e) {
+        error_log("getPOStats error: " . $e->getMessage());
+        return ['total' => 0, 'pending' => 0, 'received' => 0, 'completed' => 0, 'cancelled' => 0];
     }
-    return $stats;
 }
 
 function getTotalSuppliers() {
     $conn = getQcConnection();
-    $result = $conn->query("SELECT COUNT(*) as total FROM suppliers");
-    return $result->fetch_assoc()['total'] ?? 0;
+    try {
+        $result = $conn->query("SELECT COUNT(*) as total FROM suppliers");
+        if ($result === false) {
+            throw new Exception($conn->error);
+        }
+        $row = $result->fetch_assoc();
+        $result->free();
+        return (int)($row['total'] ?? 0);
+    } catch (Exception $e) {
+        error_log("getTotalSuppliers error: " . $e->getMessage());
+        return 0;
+    }
 }
 
 function getTotalPOs() {
     $conn = getConnection();
-    $result = $conn->query("SELECT COUNT(*) as total FROM po_header");
-    return $result->fetch_assoc()['total'] ?? 0;
+    try {
+        $result = $conn->query("SELECT COUNT(*) as total FROM po_header");
+        if ($result === false) {
+            throw new Exception($conn->error);
+        }
+        $row = $result->fetch_assoc();
+        $result->free();
+        return (int)($row['total'] ?? 0);
+    } catch (Exception $e) {
+        error_log("getTotalPOs error: " . $e->getMessage());
+        return 0;
+    }
 }
 
 function getPendingPOs() {
     $conn = getConnection();
-    $result = $conn->query("SELECT COUNT(*) as total FROM po_header WHERE status = 'Pending'");
-    return $result->fetch_assoc()['total'] ?? 0;
+    try {
+        $result = $conn->query("SELECT COUNT(*) as total FROM po_header WHERE status = 'Pending'");
+        if ($result === false) {
+            throw new Exception($conn->error);
+        }
+        $row = $result->fetch_assoc();
+        $result->free();
+        return (int)($row['total'] ?? 0);
+    } catch (Exception $e) {
+        error_log("getPendingPOs error: " . $e->getMessage());
+        return 0;
+    }
 }
 
 function getTotalItems() {
     $conn = getConnection();
-    $result = $conn->query("SELECT COUNT(*) as total FROM items");
-    return $result->fetch_assoc()['total'] ?? 0;
+    try {
+        $result = $conn->query("SELECT COUNT(*) as total FROM items");
+        if ($result === false) {
+            throw new Exception($conn->error);
+        }
+        $row = $result->fetch_assoc();
+        $result->free();
+        return (int)($row['total'] ?? 0);
+    } catch (Exception $e) {
+        error_log("getTotalItems error: " . $e->getMessage());
+        return 0;
+    }
 }
 
 function getRecentPOs($limit = 5) {
     $conn = getConnection();
-    $stmt = $conn->prepare("SELECT h.po_number, h.status, h.purchase_date, s.supplier_name 
-                            FROM po_header h 
-                            LEFT JOIN " . DB_QC . ".suppliers s ON h.supplier_id = s.supplier_id 
-                            ORDER BY h.created_at DESC LIMIT ?");
-    $stmt->bind_param("i", $limit);
-    $stmt->execute();
-    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    try {
+        $stmt = $conn->prepare("SELECT h.po_number, h.status, h.purchase_date, s.supplier_name 
+                                FROM po_header h 
+                                LEFT JOIN " . DB_QC . ".suppliers s ON h.supplier_id = s.supplier_id 
+                                ORDER BY h.created_at DESC LIMIT ?");
+        $stmt->bind_param("i", $limit);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    } catch (Exception $e) {
+        error_log("getRecentPOs error: " . $e->getMessage());
+        return [];
+    }
 }
 
 function getPOItemsWithBalances($po_id) {
     $conn = getConnection();
-    $stmt = $conn->prepare("
-        SELECT pi.*, i.item_name, i.item_code,
-               (pi.quantity - pi.received_qty) AS remaining_qty
-        FROM po_items pi
-        JOIN items i ON pi.item_id = i.item_id
-        WHERE pi.po_id = ?
-    ");
-    $stmt->bind_param("i", $po_id);
-    $stmt->execute();
-    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    try {
+        $stmt = $conn->prepare("
+            SELECT pi.*, i.item_name, i.item_code,
+                   (pi.quantity - pi.received_qty) AS remaining_qty
+            FROM po_items pi
+            JOIN items i ON pi.item_id = i.item_id
+            WHERE pi.po_id = ?
+        ");
+        $stmt->bind_param("i", $po_id);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    } catch (Exception $e) {
+        error_log("getPOItemsWithBalances error: " . $e->getMessage());
+        return [];
+    }
 }
 
 function generateGRNNumber() {
@@ -520,7 +578,8 @@ function countLoginLogs($userId = null, $dateFrom = null, $dateTo = null, $searc
     if (!empty($params)) $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $result = $stmt->get_result();
-    return $result->fetch_assoc()['total'] ?? 0;
+    $row = $result->fetch_assoc();
+    return (int)($row['total'] ?? 0);
 }
 
 /**
