@@ -1,0 +1,49 @@
+================================================================================
+           PROPRIETARY SOFTWARE LICENSE & SYSTEM CONTROL AGREEMENT
+================================================================================
+
+COPYRIGHT (C) 2026 ASB FASHION GROUP OF COMPANIES. ALL RIGHTS RESERVED.
+
+SYSTEM DEVELOPERS & AUTHORIZED CONTROLLERS:
+- Vexel IT
+- Kavindu Bogahawatte (kavizz)
+
+================================================================================
+
+1. EXCLUSIVE AUTHORIZED CONTROL & EDITING RIGHTS
+   - EXCLUSIVE MAINTENANCE & MODIFICATION: Modification, updating, refactoring, 
+     patching, feature enhancement, database schema alteration, or source code 
+     editing of this Enterprise Purchase Order (PO) Management System is STRICTLY 
+     AND EXCLUSIVELY RESTRICTED to Vexel IT and Kavindu Bogahawatte.
+   - UNAUTHORIZED EDITS PROHIBITED: No third-party entity, in-house developer, 
+     administrator, or external agency has the right or authority to alter, 
+     recompile, edit, or tamper with any backend scripts (PHP), database structures 
+     (MySQL), frontend engines (JS/Tailwind), or API endpoints without explicit 
+     written consent from Kavindu Bogahawatte (Vexel IT).
+
+2. PROPRIETARY OWNERSHIP & USAGE RESTRICTIONS
+   - OWNERSHIP: This software, its architectural layout, proprietary algorithms, 
+     matrix editing engines, local cache management systems, and associated 
+     documentation are the exclusive intellectual and commercial property of 
+     ASB Fashion Group of Companies, engineered by Vexel IT.
+   - RESTRICTION ON DISTRIBUTION: Permission is strictly DENIED to copy, 
+     redistribute, sublicense, sell, lease, reverse engineer, or host this 
+     Software on unauthorized servers outside the designated operational infrastructure 
+     of ASB Fashion Group of Companies.
+
+3. INTELLECTUAL PROPERTY & ATTRIBUTION
+   - System design credit to Vexel IT and Kavindu Bogahawatte must remain intact 
+     across all system footers, source code headers, and administrative documentation. 
+   - Removal or masking of developer attributions ("Designed & Developed by Vexel IT 
+     by Kavizz") is strictly prohibited.
+
+4. DISCLAIMER OF LIABILITY
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. 
+   IN NO EVENT SHALL VEXEL IT OR KAVINDU BOGAHAWATTE BE LIABLE FOR ANY SYSTEM FAULTS, 
+   DATA LOSS, OR DISRUPTIONS RESULTING FROM UNAUTHORIZED THIRD-PARTY EDITS, SERVER 
+   MISCONFIGURATIONS, OR UNAPPROVED DATABASE ALTERATIONS MADE BY NON-AUTHORIZED PERSONNEL.
+
+================================================================================
+ASB Fashion Group of Companies (2026)
+Lead Architect & System Owner: Kavindu Bogahawatte (kavizz) / Vexel IT
+================================================================================
