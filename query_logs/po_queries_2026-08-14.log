@@ -1,0 +1,8 @@
+[2026-08-14 07:24:01] INSERT INTO po_header (po_number, supplier_id, purchase_date, attention, remarks, expected_delivery_date, status) VALUES ('PO-20260814-0004', 534, '2026-08-14', 'test PO', 'test po2', NULL, 'Pending')
+[2026-08-14 07:24:01] INSERT INTO po_status_log (po_id, status, remarks) VALUES (71, 'Ordered', 'PO created via system')
+[2026-08-14 07:24:01] INSERT INTO items (system_code, item_code, item_name, department_id, sub_department_id, category_id, color_id, size_id, cost_price, selling_price) VALUES ('', 'sdsa', 'dfdsa', 15, 344, 152, 44, 376, 1200, 1800)
+[2026-08-14 07:24:01] INSERT INTO po_items (po_id, item_id, quantity, cost_price, selling_price, received_qty) VALUES (71, 122, 100, 1200, 1800, 0)
+[2026-08-14 07:24:01] UPDATE items SET system_code='', item_name='LADIES COAT', department_id=16, sub_department_id=527, category_id=171, color_id=NULL, size_id=NULL, cost_price=1800, selling_price=2500 WHERE item_id=118
+[2026-08-14 07:24:01] INSERT INTO po_items (po_id, item_id, quantity, cost_price, selling_price, received_qty) VALUES (71, 118, 120, 1800, 2500, 0)
+[2026-08-14 07:24:01] INSERT INTO items (system_code, item_code, item_name, department_id, sub_department_id, category_id, color_id, size_id, cost_price, selling_price) VALUES ('', '3845', 'LADIES BELT', 16, 17, 79, NULL, NULL, 1200, 0)
+[2026-08-14 07:24:01] INSERT INTO po_items (po_id, item_id, quantity, cost_price, selling_price, received_qty) VALUES (71, 123, 150, 1200, 0, 0)
