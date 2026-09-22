@@ -3,81 +3,65 @@ if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
 
-$page_title = 'ASB Fashion | Item Receiving Dashboard';
-$page = 'receiving';
+$page_title = 'ASB Fashion | Item Receiving Dashboard';$page = 'receiving';
 
 $conn = getConnection();
 
 // ========== FILTER & PAGINATION ==========
 $search_filter = isset($_GET['search']) ? trim($_GET['search']) : '';
-$date_filter   = isset($_GET['date_filter']) ? $_GET['date_filter'] : '';
-$items_per_page = 10;
+$date_filter   = isset($_GET['date_filter']) ? $_GET['date_filter'] : '';$items_per_page = 10;
 $current_page = isset($_GET['page_num']) ? (int)$_GET['page_num'] : 1;
-$offset = ($current_page - 1) * $items_per_page;
+$offset = ($current_page - 1) *$items_per_page;
 
 // ========== PROCESS GRN SUBMISSION ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_grn'])) {
     $po_id = (int)$_POST['po_id'];
-    $delivery_note = $conn->real_escape_string($_POST['delivery_note_no']);
-    $remarks = $conn->real_escape_string($_POST['remarks']);
-    $vehicle_no = $conn->real_escape_string($_POST['vehicle_no']);
-    $delivered_by = $conn->real_escape_string($_POST['delivered_by']);
+    $delivery_note =$conn->real_escape_string($_POST['delivery_note_no']);$remarks = $conn->real_escape_string($_POST['remarks']);
+    $vehicle_no =$conn->real_escape_string($_POST['vehicle_no']);$delivered_by = $conn->real_escape_string($_POST['delivered_by']);
     $total_box_count = (int)$_POST['total_box_count'];
     
-    $quantities = $_POST['receive_qty']; // Array indexed by po_item_id
+    $quantities =$_POST['receive_qty']; // Array indexed by po_item_id
     
     try {
-        $conn->begin_transaction();
-        $grn_no = "GRN-" . date('Ymd') . "-" . rand(1000, 9999);
+        $conn->begin_transaction();$grn_no = "GRN-" . date('Ymd') . "-" . rand(1000, 9999);
         
         // Insert GRN header
-        $stmt = $conn->prepare("INSERT INTO grn_header (grn_number, po_id, delivery_note_no, remarks, vehicle_no, delivered_by, total_box_count) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sissssi", $grn_no, $po_id, $delivery_note, $remarks, $vehicle_no, $delivered_by, $total_box_count);
-        $stmt->execute();
-        $grn_id = $conn->insert_id;
-        $stmt->close();
-        
-        $all_items_completed = true;
-        foreach ($quantities as $po_item_id => $qty_received) {
+        $stmt =$conn->prepare("INSERT INTO grn_header (grn_number, po_id, delivery_note_no, remarks, vehicle_no, delivered_by, total_box_count) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sissssi", $grn_no,$po_id, $delivery_note,$remarks, $vehicle_no,$delivered_by, $total_box_count);$stmt->execute();
+        $grn_id =$conn->insert_id;
+        $stmt->close();$all_items_completed = true;
+        foreach ($quantities as $po_item_id =>$qty_received) {
             $po_item_id = (int)$po_item_id;
             $qty_received = (int)$qty_received;
             if ($qty_received <= 0) continue;
 
-            $st = $conn->prepare("SELECT item_id, quantity, received_qty FROM po_items WHERE po_item_id = ?");
+            $st =$conn->prepare("SELECT item_id, quantity, received_qty FROM po_items WHERE po_item_id = ?");
             $st->bind_param("i", $po_item_id);
-            $st->execute();
-            $rowItem = $st->get_result()->fetch_assoc();
-            $st->close();
+            $st->execute();$rowItem = $st->get_result()->fetch_assoc();$st->close();
 
-            $new_total_received = $rowItem['received_qty'] + $qty_received;
-            if ($new_total_received > $rowItem['quantity']) {
+            $new_total_received = $rowItem['received_qty'] +$qty_received;
+            if ($new_total_received >$rowItem['quantity']) {
                 throw new Exception("Quantity exceeds outstanding balance for item.");
             }
 
-            $inst = $conn->prepare("INSERT INTO grn_items (grn_id, po_item_id, item_id, qty_received) VALUES (?, ?, ?, ?)");
-            $inst->bind_param("iiii", $grn_id, $po_item_id, $rowItem['item_id'], $qty_received);
-            $inst->execute();
-            $inst->close();
+            $inst =$conn->prepare("INSERT INTO grn_items (grn_id, po_item_id, item_id, qty_received) VALUES (?, ?, ?, ?)");
+            $inst->bind_param("iiii", $grn_id,$po_item_id, $rowItem['item_id'],$qty_received);
+            $inst->execute();$inst->close();
 
-            $upd = $conn->prepare("UPDATE po_items SET received_qty = ? WHERE po_item_id = ?");
-            $upd->bind_param("ii", $new_total_received, $po_item_id);
-            $upd->execute();
-            $upd->close();
+            $upd =$conn->prepare("UPDATE po_items SET received_qty = ? WHERE po_item_id = ?");
+            $upd->bind_param("ii", $new_total_received,$po_item_id);
+            $upd->execute();$upd->close();
 
-            if ($new_total_received < $rowItem['quantity']) {
-                $all_items_completed = false;
+            if ($new_total_received < $rowItem['quantity']) {$all_items_completed = false;
             }
         }
 
-        $finalStatus = $all_items_completed ? 'Completed' : 'Received';
-        $updHeader = $conn->prepare("UPDATE po_header SET status = ? WHERE po_id = ?");
-        $updHeader->bind_param("si", $finalStatus, $po_id);
-        $updHeader->execute();
-        $updHeader->close();
+        $finalStatus =$all_items_completed ? 'Completed' : 'Received';
+        $updHeader =$conn->prepare("UPDATE po_header SET status = ? WHERE po_id = ?");
+        $updHeader->bind_param("si", $finalStatus, $po_id);$updHeader->execute();
+        $updHeader->close();$conn->commit();
         
-        $conn->commit();
-        
-        $_SESSION['print_grn_id'] = $grn_id;
+        $_SESSION['print_grn_id'] =$grn_id;
         $_SESSION['success'] = "
             <div style='font-size: 16px; margin-bottom: 12px;'><strong>📦 Goods Received Note ($grn_no) Added Successfully!</strong></div>
             <div style='margin-bottom: 15px;'>PO status updated to: <span style='background:#d32f2f; color:#fff; padding:2px 8px; border-radius:3px; font-weight:bold; font-size:11px;'>$finalStatus</span></div>
@@ -86,9 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_grn'])) {
                 <a href='print_grn.php?grn_id=$grn_id&type=internal' target='_blank' style='background:#333; color:#fff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition: 0.2s;'>📋 Print Gate Pass Copy</a>
             </div>
         ";
-    } catch (Exception $e) {
-        $conn->rollback();
-        $_SESSION['error'] = $e->getMessage();
+    } catch (Exception $e) {$conn->rollback();
+        $_SESSION['error'] =$e->getMessage();
     }
     header("Location: receive_po_dashboard.php");
     exit;
@@ -99,16 +82,14 @@ $where_clauses = ["h.status NOT IN ('Cancelled', 'Completed')"];
 $types = "";
 $params = [];
 
-if (!empty($search_filter)) {
-    $where_clauses[] = "(h.po_number LIKE ? OR s.supplier_name LIKE ?)";
-    $search_param = "%" . $search_filter . "%";
-    $params[] = $search_param;
-    $params[] = $search_param;
+if (!empty($search_filter)) {$where_clauses[] = "(h.po_number LIKE ? OR s.supplier_name LIKE ?)";
+    $search_param = "\%" . $search_filter . "%";
+    $params[] =$search_param;
+    $params[] =$search_param;
     $types .= "ss";
 }
-if (!empty($date_filter)) {
-    $where_clauses[] = "h.purchase_date = ?";
-    $params[] = $date_filter;
+if (!empty($date_filter)) {$where_clauses[] = "h.purchase_date = ?";
+    $params[] =$date_filter;
     $types .= "s";
 }
 $where_str = implode(" AND ", $where_clauses);
@@ -116,29 +97,24 @@ $where_str = implode(" AND ", $where_clauses);
 // Count total (for pagination)
 $count_sql = "SELECT COUNT(DISTINCT h.po_id) FROM po_header h LEFT JOIN return_qc.suppliers s ON h.supplier_id = s.supplier_id WHERE $where_str";
 $count_stmt = $conn->prepare($count_sql);
-if (!empty($params)) $count_stmt->bind_param($types, ...$params);
-$count_stmt->execute();
-$total_pos = $count_stmt->get_result()->fetch_row()[0];
-$count_stmt->close();
-$total_pages = ceil($total_pos / $items_per_page);
+if (!empty($params)) $count_stmt->bind_param($types, ...$params);$count_stmt->execute();
+$total_pos =$count_stmt->get_result()->fetch_row()[0];
+$count_stmt->close();$total_pages = ceil($total_pos / $items_per_page);
 
 // Main query (with latest GRN id)
 $main_sql = "SELECT h.*, s.supplier_name, 
-                    (SELECT gh.grn_id FROM grn_header gh WHERE gh.po_id = h.po_id ORDER BY gh.grn_id DESC LIMIT 1) as latest_grn_id
+                (SELECT gh.grn_id FROM grn_header gh WHERE gh.po_id = h.po_id ORDER BY gh.grn_id DESC LIMIT 1) as latest_grn_id
              FROM po_header h 
              LEFT JOIN return_qc.suppliers s ON h.supplier_id = s.supplier_id 
              WHERE $where_str 
              ORDER BY h.purchase_date DESC, h.po_id DESC 
              LIMIT ? OFFSET ?";
 $types .= "ii";
-$params[] = $items_per_page;
-$params[] = $offset;
+$params[] =$items_per_page;
+$params[] =$offset;
 
-$query_stmt = $conn->prepare($main_sql);
-$query_stmt->bind_param($types, ...$params);
-$query_stmt->execute();
-$pos_list = $query_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$query_stmt->close();
+$query_stmt =$conn->prepare($main_sql);$query_stmt->bind_param($types, ...$params);
+$query_stmt->execute();$pos_list = $query_stmt->get_result()->fetch_all(MYSQLI_ASSOC);$query_stmt->close();
 
 // ========== INCLUDE VIEWS ==========
 include ROOT_PATH . 'includes/header.php';
@@ -229,7 +205,7 @@ include ROOT_PATH . 'includes/sidebar.php';
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($pos_list as $po): 
+                            <?php foreach ($pos_list as$po): 
                                 $badgeClass = (strtolower($po['status']) == 'received') ? 'asb-badge-received' : 'asb-badge-pending';
                                 $hasGrn = !empty($po['latest_grn_id']);
                             ?>
@@ -311,7 +287,14 @@ include ROOT_PATH . 'includes/sidebar.php';
                     <input type="text" name="remarks" class="asb-input" placeholder="Condition comments...">
                 </div>
             </div>
-            <h5 style="color:#444; font-weight:bold; font-size:14px; text-transform:uppercase; margin-bottom:12px; border-bottom:1px solid #ddd; padding-bottom:8px;">Line Item Breakdown</h5>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #ddd; padding-bottom:8px;">
+                <h5 style="color:#444; font-weight:bold; font-size:14px; text-transform:uppercase; margin:0;">Line Item Breakdown</h5>
+                <div style="width: 250px;">
+                    <input type="text" id="modal_item_search" class="asb-input" placeholder="🔍 Search item code or name..." onkeyup="filterModalItems()" style="padding: 6px 10px; font-size: 12px;">
+                </div>
+            </div>
+
             <div class="table-responsive" style="border:1px solid #eee; border-radius:8px; overflow:hidden;">
                 <table style="width:100%; border-collapse:collapse; margin-bottom:0;" id="grn_items_table" class="table asb-table">
                     <thead>
@@ -328,6 +311,14 @@ include ROOT_PATH . 'includes/sidebar.php';
                     </tbody>
                 </table>
             </div>
+
+            <!-- PO Summary Bar at bottom of modal table -->
+            <div id="po_items_summary" style="margin-top: 10px; padding: 10px 15px; background: #f8f9fa; border-radius: 6px; font-size: 13px; color: #555; display: flex; justify-content: space-between; font-weight: 600;">
+                <span>Total Line Items: <span id="summary_total_items" style="color:#b71c1c;">0</span></span>
+                <span>Fully Completed: <span id="summary_completed_items" style="color:#2e7d32;">0</span></span>
+                <span>Pending Receipt: <span id="summary_pending_items" style="color:#e65100;">0</span></span>
+            </div>
+
             <div style="margin-top:25px; display:flex; gap:12px; justify-content:flex-end; border-top:1px solid #eee; padding-top:20px;">
                 <button type="button" class="btn-asb-action" style="background:#fff; color:#555; border:1px solid #ccc; box-shadow:none;" onclick="closeGrnModal()">Cancel</button>
                 <button type="submit" class="btn-asb-action">✅ Save & Commit</button>
@@ -348,11 +339,14 @@ include ROOT_PATH . 'includes/sidebar.php';
 </div>
 
 <script>
+let globalPoItems = [];
+
 // ===== RECEIVING MODAL =====
 function openGrnModal(poId, poNumber, supplierName) {
     document.getElementById('modal_po_id').value = poId;
     document.getElementById('modal_po_span').innerText = poNumber;
     document.getElementById('modal_supplier_span').innerText = supplierName;
+    document.getElementById('modal_item_search').value = '';
     
     const tbody = document.getElementById('grn_items_tbody');
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#888;">Loading items...</td></tr>';
@@ -361,32 +355,72 @@ function openGrnModal(poId, poNumber, supplierName) {
     fetch(`api.php?action=getPO&po_id=${poId}`)
         .then(res => res.json())
         .then(data => {
-            tbody.innerHTML = '';
-            data.items.forEach(item => {
-                let remaining = item.quantity - item.received_qty;
-                if (remaining < 0) remaining = 0;
-
-                let codeDisplay = item.item_code ? `[${item.item_code}]` : '';
-                let productDisplay = `<strong style="color:#b71c1c;">${codeDisplay}</strong> <span style="color:#333;">${item.item_name}</span>`;
-
-                let row = `<tr>
-                    <td>${productDisplay}</td>
-                    <td style="font-weight:600;">${item.quantity}</td>
-                    <td style="color: #0288d1; font-weight:600;">${item.received_qty}</td>
-                    <td style="font-weight:700; color: ${remaining > 0 ? '#d32f2f' : '#2e7d32'};">${remaining}</td>
-                    <td>
-                        <input type="number" name="receive_qty[${item.po_item_id}]" 
-                               class="asb-input" value="${remaining}" 
-                               min="0" max="${remaining}" 
-                               style="width:110px; padding:6px 10px; text-align:center; font-weight:bold; color:#b71c1c;" ${remaining === 0 ? 'disabled' : ''}>
-                    </td>
-                </tr>`;
-                tbody.innerHTML += row;
-            });
+            globalPoItems = data.items || [];
+            renderModalTable(globalPoItems);
         })
         .catch(err => {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Error loading items.</td></tr>';
         });
+}
+
+function renderModalTable(items) {
+    const tbody = document.getElementById('grn_items_tbody');
+    tbody.innerHTML = '';
+
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">No items match your search.</td></tr>';
+        updateSummary(0, 0, 0);
+        return;
+    }
+
+    let completedCount = 0;
+    let pendingCount = 0;
+
+    items.forEach(item => {
+        let remaining = item.quantity - item.received_qty;
+        if (remaining < 0) remaining = 0;
+
+        if (remaining === 0) {
+            completedCount++;
+        } else {
+            pendingCount++;
+        }
+
+        let codeDisplay = item.item_code ? `[${item.item_code}]` : '';
+        let productDisplay = `<strong style="color:#b71c1c;">${codeDisplay}</strong> <span style="color:#333;">${item.item_name}</span>`;
+
+        let row = `<tr>
+            <td>${productDisplay}</td>
+            <td style="font-weight:600;">${item.quantity}</td>
+            <td style="color: #0288d1; font-weight:600;">${item.received_qty}</td>
+            <td style="font-weight:700; color: ${remaining > 0 ? '#d32f2f' : '#2e7d32'};">${remaining}</td>
+            <td>
+                <input type="number" name="receive_qty[${item.po_item_id}]" 
+                       class="asb-input" value="${remaining}" 
+                       min="0" max="${remaining}" 
+                       style="width:110px; padding:6px 10px; text-align:center; font-weight:bold; color:#b71c1c;" ${remaining === 0 ? 'disabled' : ''}>
+            </td>
+        </tr>`;
+        tbody.innerHTML += row;
+    });
+
+    updateSummary(items.length, completedCount, pendingCount);
+}
+
+function filterModalItems() {
+    const query = document.getElementById('modal_item_search').value.toLowerCase();
+    const filtered = globalPoItems.filter(item => {
+        const code = (item.item_code || '').toLowerCase();
+        const name = (item.item_name || '').toLowerCase();
+        return code.includes(query) || name.includes(query);
+    });
+    renderModalTable(filtered);
+}
+
+function updateSummary(total, completed, pending) {
+    document.getElementById('summary_total_items').innerText = total;
+    document.getElementById('summary_completed_items').innerText = completed;
+    document.getElementById('summary_pending_items').innerText = pending;
 }
 
 function closeGrnModal() {

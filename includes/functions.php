@@ -43,59 +43,137 @@ function logLogin($userId, $ip = null, $userAgent = null) {
 }
 
 /**
- * Get the current user's role
+ * Get the current user's role (prioritizes session, falls back to DB query)
  */
-function getUserRole($userId) {
+function getUserRole($userId = null) {
+    startSession();
+    if ($userId === null && isset($_SESSION['role'])) {
+        return $_SESSION['role'];
+    }
+    
+    $targetUserId = $userId ?? ($_SESSION['user_id'] ?? null);
+    if (!$targetUserId) return null;
+
     $conn = getConnection();
     $stmt = $conn->prepare("SELECT role FROM po_users WHERE id = ?");
-    $stmt->bind_param("i", $userId);
+    $stmt->bind_param("i", $targetUserId);
     $stmt->execute();
     $result = $stmt->get_result();
     $row = $result->fetch_assoc();
     $stmt->close();
-    return $row['role'] ?? null;
+    
+    $role = $row['role'] ?? 'user';
+    if ($userId === null) {
+        $_SESSION['role'] = $role;
+    }
+    return $role;
 }
 
 /**
  * Check if current logged-in user is admin
  */
 function isAdmin() {
-    if (!isset($_SESSION['user_id'])) return false;
-    static $role = null;
-    if ($role === null) {
-        $role = getUserRole($_SESSION['user_id']);
-    }
-    return $role === 'admin';
+    return getUserRole() === 'admin';
 }
 
 /**
  * Check if current logged-in user is a "received" user (GRN only)
  */
 function isReceivedUser() {
-    if (!isset($_SESSION['user_id'])) return false;
-    static $role = null;
-    if ($role === null) {
-        $role = getUserRole($_SESSION['user_id']);
-    }
-    return $role === 'received';
+    return getUserRole() === 'received';
 }
 
 /**
- * Authenticate using plain text or MD5 password from po_users
+ * Check if current logged-in user is a standard user
+ */
+function isStandardUser() {
+    return getUserRole() === 'user';
+}
+
+/**
+ * Page route security middleware
+ */
+function requireRole(array $allowedRoles) {
+    requireLogin();
+    if (!in_array(getUserRole(), $allowedRoles)) {
+        header('Location: dashboard.php?error=unauthorized');
+        exit;
+    }
+}
+
+/**
+ * Authenticate using Bcrypt hash, with auto-migration for plain text or MD5 passwords.
  */
 function authenticate($username, $password) {
     $conn = getConnection();
-    $stmt = $conn->prepare("SELECT id, password, role FROM po_users WHERE username = ?");
+    $stmt = $conn->prepare("SELECT id, username, password, role FROM po_users WHERE username = ?");
     $stmt->bind_param("s", $username);
     $stmt->execute();
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
     $stmt->close();
     
-    if ($user && ($password === $user['password'] || md5($password) === $user['password'])) {
-        return $user;
+    if (!$user) {
+        return false;
     }
-    return false;
+
+    $dbPassword = $user['password'];
+    $authenticated = false;
+
+    // 1. Verify standard Bcrypt hash
+    if (password_verify($password, $dbPassword)) {
+        $authenticated = true;
+        
+        // Re-hash if algorithms or cost parameters change
+        if (password_needs_rehash($dbPassword, PASSWORD_BCRYPT)) {
+            $newHash = password_hash($password, PASSWORD_BCRYPT);
+            $rehashStmt = $conn->prepare("UPDATE po_users SET password = ? WHERE id = ?");
+            $rehashStmt->bind_param("si", $newHash, $user['id']);
+            $rehashStmt->execute();
+            $rehashStmt->close();
+        }
+    } 
+    // 2. Legacy fallback for plain text or MD5 (auto-migrates to Bcrypt hash upon login)
+    elseif ($password === $dbPassword || md5($password) === $dbPassword) {
+        $authenticated = true;
+        
+        $newHash = password_hash($password, PASSWORD_BCRYPT);
+        $updateStmt = $conn->prepare("UPDATE po_users SET password = ? WHERE id = ?");
+        $updateStmt->bind_param("si", $newHash, $user['id']);
+        $updateStmt->execute();
+        $updateStmt->close();
+    }
+
+    return $authenticated ? $user : false;
+}
+
+// ============================================================
+// DATABASE-DRIVEN DASHBOARD TABS (RBAC)
+// ============================================================
+
+/**
+ * Fetch permitted tabs from database for a specified role and layout section
+ */
+function getTabsByRole(string $role, string $section = 'main'): array {
+    $conn = getConnection();
+    $sql = "SELECT t.* 
+            FROM po_tabs t
+            INNER JOIN po_role_tabs rt ON t.id = rt.tab_id
+            WHERE rt.role = ? AND t.section = ?
+            ORDER BY t.display_order ASC";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ss", $role, $section);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $tabs = [];
+    while ($row = $result->fetch_assoc()) {
+        $tabs[] = $row;
+    }
+    
+    $stmt->close();
+    return $tabs;
 }
 
 // ============================================================
@@ -104,8 +182,6 @@ function authenticate($username, $password) {
 
 /**
  * Thread-safe PO Number Generator using row-level locking (FOR UPDATE)
- * Prevents race condition collisions across multiple user sessions.
- * 
  * Target Format: PO-YYYYMMDD-0002
  */
 function generateAtomicPONumber($conn) {
@@ -143,7 +219,7 @@ function generateAtomicPONumber($conn) {
 }
 
 // ============================================================
-// CATALOG TAXONOMY FUNCTIONS (Departments, SubDepts, Categories, Colors, Sizes)
+// CATALOG TAXONOMY FUNCTIONS
 // ============================================================
 
 function getDepartments() {
@@ -186,9 +262,6 @@ function getSizes() {
 // DRAFT SYSTEM (Auto-Backup & Manual Restore Helpers)
 // ============================================================
 
-/**
- * Check if the active session has an existing draft with saved line items.
- */
 function getActiveSessionDraftCount() {
     startSession();
     $sessionId = session_id();
@@ -212,9 +285,6 @@ function getActiveSessionDraftCount() {
     }
 }
 
-/**
- * Retrieve draft data for the current session to print or restore.
- */
 function getSessionDraftData() {
     startSession();
     $sessionId = session_id();
