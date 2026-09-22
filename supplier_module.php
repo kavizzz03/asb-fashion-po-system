@@ -1,12 +1,10 @@
 <?php
-// 1. DATABASE CONFIGURATION
-$host = '127.0.0.1';
-$db   = 'return_qc';
-$user = 'root'; 
-$pass = '';     
+// 1. DATABASE CONFIGURATIONS (Dual-DB Setup)
+$host    = '127.0.0.1';
+$user    = 'root'; 
+$pass    = '';     
 $charset = 'utf8mb4';
 
-$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -14,93 +12,109 @@ $options = [
 ];
 
 try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
+    $pdo_po = new PDO("mysql:host=$host;dbname=po_system;charset=$charset", $user, $pass, $options);
+    $pdo_qc = new PDO("mysql:host=$host;dbname=return_qc;charset=$charset", $user, $pass, $options);
 } catch (\PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
 
-// 2. BACKEND ROUTER OPERATIONS (CRUD)
+// 2. BACKEND ROUTER OPERATIONS (Dual-Table Sync)
 $action = $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
-        $countQuery = $pdo->query("SELECT COUNT(*) as total FROM suppliers")->fetch();
-        $nextIndex = sprintf("%02d", $countQuery['total'] + 1);
-        $generatedStatus = "New " . $nextIndex;
+        $supplier_name  = trim($_POST['supplier_name'] ?? '');
+        $system_id      = $_POST['system_id'] ?? null;
+        $contact_number = $_POST['contact_number'] ?? null;
+        $land_number    = $_POST['land_number'] ?? null;
+        $fax_number     = $_POST['fax_number'] ?? null;
+        $email          = $_POST['email'] ?? null;
+        $address        = $_POST['address'] ?? null;
+        $status         = !empty($_POST['status']) ? $_POST['status'] : 'Active';
+        $contact_person = $_POST['contact_person'] ?? null;
+        $whatsapp       = $_POST['whatsapp'] ?? null;
 
-        $stmt = $pdo->prepare("INSERT INTO suppliers (supplier_name, system_id, contact_number, land_number, fax_number, email, address, status, contact_person, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $_POST['supplier_name'], 
-            $_POST['system_id'] ?? '',
-            $_POST['contact_number'],
-            $_POST['land_number'],
-            $_POST['fax_number'] ?? '',
-            $_POST['email'],
-            $_POST['address'],
-            $generatedStatus,
-            $_POST['contact_person'],
-            $_POST['whatsapp']
-        ]);
-        header("Location: supplier_module.php?msg=Supplier Added");
-        exit;
+        try {
+            $stmt1 = $pdo_po->prepare("INSERT INTO suppliers (supplier_name, system_id, contact_number, land_number, fax_number, email, address, status, contact_person, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt1->execute([$supplier_name, $system_id, $contact_number, $land_number, $fax_number, $email, $address, $status, $contact_person, $whatsapp]);
+            $inserted_id = $pdo_po->lastInsertId();
+
+            $stmt2 = $pdo_qc->prepare("INSERT INTO suppliers (supplier_id, supplier_name, system_id, contact_number, land_number, fax_number, email, address, status, contact_person, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt2->execute([$inserted_id, $supplier_name, $system_id, $contact_number, $land_number, $fax_number, $email, $address, $status, $contact_person, $whatsapp]);
+
+            header("Location: supplier_module.php?msg=Supplier Added to Both Databases");
+            exit;
+        } catch (\PDOException $e) {
+            die("Error inserting supplier: " . $e->getMessage());
+        }
     }
     
     if ($action === 'update') {
-        $stmt = $pdo->prepare("UPDATE suppliers SET supplier_name=?, system_id=?, contact_number=?, land_number=?, fax_number=?, email=?, address=?, status=?, contact_person=?, whatsapp=? WHERE supplier_id=?");
-        $stmt->execute([
-            $_POST['supplier_name'],
-            $_POST['system_id'] ?? '',
-            $_POST['contact_number'],
-            $_POST['land_number'],
-            $_POST['fax_number'] ?? '',
-            $_POST['email'],
-            $_POST['address'],
-            $_POST['status'],
-            $_POST['contact_person'],
-            $_POST['whatsapp'],
-            $_POST['supplier_id']
-        ]);
-        header("Location: supplier_module.php?msg=Supplier Updated");
-        exit;
+        $supplier_id    = (int)$_POST['supplier_id'];
+        $supplier_name  = trim($_POST['supplier_name'] ?? '');
+        $system_id      = $_POST['system_id'] ?? null;
+        $contact_number = $_POST['contact_number'] ?? null;
+        $land_number    = $_POST['land_number'] ?? null;
+        $fax_number     = $_POST['fax_number'] ?? null;
+        $email          = $_POST['email'] ?? null;
+        $address        = $_POST['address'] ?? null;
+        $status         = $_POST['status'] ?? 'Active';
+        $contact_person = $_POST['contact_person'] ?? null;
+        $whatsapp       = $_POST['whatsapp'] ?? null;
+
+        try {
+            $stmt1 = $pdo_po->prepare("UPDATE suppliers SET supplier_name=?, system_id=?, contact_number=?, land_number=?, fax_number=?, email=?, address=?, status=?, contact_person=?, whatsapp=? WHERE supplier_id=?");
+            $stmt1->execute([$supplier_name, $system_id, $contact_number, $land_number, $fax_number, $email, $address, $status, $contact_person, $whatsapp, $supplier_id]);
+
+            $stmt2 = $pdo_qc->prepare("UPDATE suppliers SET supplier_name=?, system_id=?, contact_number=?, land_number=?, fax_number=?, email=?, address=?, status=?, contact_person=?, whatsapp=? WHERE supplier_id=?");
+            $stmt2->execute([$supplier_name, $system_id, $contact_number, $land_number, $fax_number, $email, $address, $status, $contact_person, $whatsapp, $supplier_id]);
+
+            header("Location: supplier_module.php?msg=Supplier Updated in Both Databases");
+            exit;
+        } catch (\PDOException $e) {
+            die("Error updating supplier: " . $e->getMessage());
+        }
     }
 }
 
 if ($action === 'delete' && isset($_GET['id'])) {
-    $stmt = $pdo->prepare("DELETE FROM suppliers WHERE supplier_id = ?");
-    $stmt->execute([$_GET['id']]);
-    header("Location: supplier_module.php?msg=Record Removed");
-    exit;
+    $supplier_id = (int)$_GET['id'];
+    try {
+        $stmt1 = $pdo_po->prepare("DELETE FROM suppliers WHERE supplier_id = ?");
+        $stmt1->execute([$supplier_id]);
+
+        $stmt2 = $pdo_qc->prepare("DELETE FROM suppliers WHERE supplier_id = ?");
+        $stmt2->execute([$supplier_id]);
+
+        header("Location: supplier_module.php?msg=Supplier Removed from Both Databases");
+        exit;
+    } catch (\PDOException $e) {
+        die("Error deleting supplier: " . $e->getMessage());
+    }
 }
 
 // 3. SEARCH & PAGINATION ENGINE
 $limit = 25; 
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($page - 1) * $limit;
-
-// Search term
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 
-// Build WHERE clause for search across multiple columns
 $whereClause = '';
 $params = [];
 if (!empty($search)) {
     $searchTerm = '%' . $search . '%';
-    // Search in relevant columns – includes contact_person and whatsapp
     $whereClause = "WHERE (supplier_name LIKE ? OR contact_person LIKE ? OR contact_number LIKE ? OR whatsapp LIKE ? OR land_number LIKE ? OR email LIKE ? OR status LIKE ? OR system_id LIKE ?)";
     $params = [$searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm];
 }
 
-// Count total records with search filter
 $countSql = "SELECT COUNT(*) FROM suppliers $whereClause";
-$stmtCount = $pdo->prepare($countSql);
+$stmtCount = $pdo_po->prepare($countSql);
 $stmtCount->execute($params);
 $totalRecords = $stmtCount->fetchColumn();
 $totalPages = ceil($totalRecords / $limit);
 
-// Fetch data with search and pagination
 $sql = "SELECT * FROM suppliers $whereClause ORDER BY supplier_id DESC LIMIT ? OFFSET ?";
-$stmt = $pdo->prepare($sql);
-// Merge search params with limit and offset
+$stmt = $pdo_po->prepare($sql);
 $execParams = array_merge($params, [$limit, $offset]);
 $stmt->execute($execParams);
 $suppliers = $stmt->fetchAll();
@@ -129,7 +143,6 @@ $suppliers = $stmt->fetchAll();
         .pagination-btn:hover { background: #fef2f2; border-color: #b91c1c; }
         .pagination-btn.active { background: #b91c1c; border-color: #b91c1c; color: white; }
 
-        /* MODAL – refined */
         .modal-overlay { background: rgba(185, 28, 28, 0.3); backdrop-filter: blur(6px); }
         .modal-panel {
             transform: scale(0.95) translateY(15px);
@@ -139,28 +152,13 @@ $suppliers = $stmt->fetchAll();
             display: flex;
             flex-direction: column;
         }
-        .modal-panel.show {
-            transform: scale(1) translateY(0);
-            opacity: 1;
-        }
-        .modal-panel .modal-body {
-            overflow-y: auto;
-            flex: 1 1 auto;
-            padding: 1.5rem 1.5rem 0.5rem 1.5rem;
-        }
-        .modal-panel .modal-footer {
-            padding: 1rem 1.5rem 1.5rem 1.5rem;
-            border-top: 1px solid #fecaca;
-            flex-shrink: 0;
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.75rem;
-        }
+        .modal-panel.show { transform: scale(1) translateY(0); opacity: 1; }
+        .modal-panel .modal-body { overflow-y: auto; flex: 1 1 auto; padding: 1.5rem 1.5rem 0.5rem 1.5rem; }
+        .modal-panel .modal-footer { padding: 1rem 1.5rem 1.5rem 1.5rem; border-top: 1px solid #fecaca; flex-shrink: 0; display: flex; justify-content: flex-end; gap: 0.75rem; }
 
         .input-group-icon { position: relative; }
         .input-group-icon .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #b91c1c; font-size: 0.9rem; pointer-events: none; }
         .input-group-icon input, .input-group-icon textarea { padding-left: 2.6rem; }
-        .input-group-icon textarea .icon { top: 0.9rem; transform: none; }
         .form-input { border: 1px solid #fecaca; border-radius: 0.75rem; padding: 0.7rem 1rem; width: 100%; font-size: 0.9rem; transition: 0.15s; background: #fafbfc; }
         .form-input:focus { border-color: #b91c1c; background: white; box-shadow: 0 0 0 3px rgba(185,28,28,0.1); outline: none; }
         .form-label { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #b91c1c; margin-bottom: 0.25rem; }
@@ -168,69 +166,18 @@ $suppliers = $stmt->fetchAll();
 
         .btn-save {
             background: linear-gradient(135deg, #b91c1c, #7f1d1d);
-            color: white;
-            border: none;
-            padding: 0.65rem 2rem;
-            border-radius: 0.75rem;
-            font-weight: 700;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 4px 12px rgba(185,28,28,0.3);
+            color: white; border: none; padding: 0.65rem 2rem; border-radius: 0.75rem; font-weight: 700; font-size: 0.85rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(185,28,28,0.3);
         }
-        .btn-save:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(185,28,28,0.4);
-            background: linear-gradient(135deg, #991b1b, #6b1d1d);
-        }
+        .btn-save:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(185,28,28,0.4); background: linear-gradient(135deg, #991b1b, #6b1d1d); }
         .btn-cancel {
-            background: transparent;
-            border: 1.5px solid #b91c1c;
-            color: #b91c1c;
-            padding: 0.65rem 2rem;
-            border-radius: 0.75rem;
-            font-weight: 700;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
+            background: transparent; border: 1.5px solid #b91c1c; color: #b91c1c; padding: 0.65rem 2rem; border-radius: 0.75rem; font-weight: 700; font-size: 0.85rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;
         }
-        .btn-cancel:hover {
-            background: #fef2f2;
-            border-color: #7f1d1d;
-            color: #7f1d1d;
-            transform: translateY(-2px);
-        }
+        .btn-cancel:hover { background: #fef2f2; border-color: #7f1d1d; color: #7f1d1d; transform: translateY(-2px); }
 
-        /* Search bar styling */
-        .search-wrapper {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .search-wrapper input {
-            flex: 1;
-            min-width: 200px;
-        }
-        .search-wrapper .btn-clear {
-            background: transparent;
-            border: 1px solid #fecaca;
-            color: #b91c1c;
-            padding: 0.45rem 1rem;
-            border-radius: 0.75rem;
-            font-weight: 600;
-            transition: 0.15s;
-        }
-        .search-wrapper .btn-clear:hover {
-            background: #fef2f2;
-            border-color: #b91c1c;
-        }
+        .search-wrapper { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .search-wrapper input { flex: 1; min-width: 200px; }
 
-        /* PRINT STYLES */
+        /* PRINT STYLES (A5 PORTRAIT) */
         @media print {
             html, body { background: #fff !important; margin: 0; padding: 0; }
             body > *:not(#print-container) { display: none !important; }
@@ -319,14 +266,13 @@ $suppliers = $stmt->fetchAll();
             }
             .dotted-line {
                 border-bottom: 1px dotted #b91c1c;
-                height: 18px;
+                min-height: 18px;
                 margin-bottom: 4px;
                 line-height: 18px;
                 font-weight: 500;
                 color: #0f172a;
                 padding-left: 2px;
             }
-            .dotted-line:last-child { margin-bottom: 0; }
             .print-handwritten {
                 border: 2px dashed #b91c1c;
                 border-radius: 6px;
@@ -351,7 +297,6 @@ $suppliers = $stmt->fetchAll();
                 height: 20px;
                 margin-bottom: 4px;
             }
-            .print-handwritten .dotted-line:last-child { margin-bottom: 0; }
             .print-signatures {
                 display: flex;
                 justify-content: space-between;
@@ -399,7 +344,7 @@ $suppliers = $stmt->fetchAll();
 </head>
 <body>
 
-    <!-- HEADER – Red theme -->
+    <!-- HEADER -->
     <header class="bg-gradient-to-r from-red-700 to-red-800 border-b border-red-900/40 sticky top-0 z-40 no-print shadow-md">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex flex-wrap items-center justify-between py-3 gap-3">
@@ -407,17 +352,17 @@ $suppliers = $stmt->fetchAll();
                     <div class="h-10 w-10 rounded-xl bg-white text-red-700 flex items-center justify-center font-black text-lg shadow-sm">ASB</div>
                     <div>
                         <h1 class="text-lg font-extrabold tracking-tight text-white leading-none">Supplier Control</h1>
-                        <p class="text-[11px] font-medium text-red-100">Enterprise Quality · Return QC</p>
+                        <p class="text-[11px] font-medium text-red-100">Enterprise Quality · Dual DB Sync</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
                     <button onclick="openModal('add')" class="btn-primary text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 bg-white text-red-700 hover:bg-red-50 border border-red-200">
-                        <i class="fas fa-plus-circle"></i> Register
+                        <i class="fas fa-plus-circle"></i> Register Supplier
                     </button>
+                    <!-- BLANK FORM PRINT BUTTON -->
                     <button onclick="printEmptyForm()" class="btn-outline text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-white border-white/40 hover:bg-white/10">
                         <i class="fas fa-print"></i> Blank Form
                     </button>
-                    <!-- *** NEW DASHBOARD BUTTON *** -->
                     <a href="dashboard.php" class="btn-outline text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-white border-white/40 hover:bg-white/10 transition">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
@@ -426,29 +371,27 @@ $suppliers = $stmt->fetchAll();
         </div>
     </header>
 
-    <!-- MAIN (screen) -->
+    <!-- MAIN BODY -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 no-print">
-        <!-- STATS -->
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
             <div class="card p-5 flex items-center gap-4 border-l-4 border-l-red-600">
                 <div class="h-12 w-12 rounded-xl bg-red-50 text-red-700 flex items-center justify-center text-xl"><i class="fas fa-building"></i></div>
                 <div><p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Total Suppliers</p><p class="text-2xl font-black text-slate-800"><?= number_format($totalRecords); ?></p></div>
             </div>
             <div class="card p-5 flex items-center gap-4 border-l-4 border-l-red-600">
-                <div class="h-12 w-12 rounded-xl bg-red-50 text-red-700 flex items-center justify-center text-xl"><i class="fas fa-database"></i></div>
-                <div><p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Engine</p><p class="text-2xl font-black text-slate-800">MySQL · PDO</p></div>
+                <div class="h-12 w-12 rounded-xl bg-red-50 text-red-700 flex items-center justify-center text-xl"><i class="fas fa-sync"></i></div>
+                <div><p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Sync Engines</p><p class="text-2xl font-black text-slate-800">po_system &amp; return_qc</p></div>
             </div>
             <div class="card p-5 flex items-center gap-4 border-l-4 border-l-red-600">
                 <div class="h-12 w-12 rounded-xl bg-red-50 text-red-700 flex items-center justify-center text-xl"><i class="fas fa-layer-group"></i></div>
                 <div><p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Page</p><p class="text-2xl font-black text-slate-800"><?= $page; ?> / <?= max(1, $totalPages); ?></p></div>
             </div>
             <div class="card p-5 flex items-center gap-4 border-l-4 border-l-red-600 bg-gradient-to-br from-red-50 to-white">
-                <div class="h-12 w-12 rounded-xl bg-red-600 text-white flex items-center justify-center text-xl"><i class="fas fa-rocket"></i></div>
-                <div><p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Capacity</p><p class="text-2xl font-black text-red-700">10k+</p></div>
+                <div class="h-12 w-12 rounded-xl bg-red-600 text-white flex items-center justify-center text-xl"><i class="fas fa-print"></i></div>
+                <div><p class="text-xs font-semibold text-red-600 uppercase tracking-wider">A5 Printer Engine</p><p class="text-2xl font-black text-red-700">Ready</p></div>
             </div>
         </div>
 
-        <!-- MESSAGE -->
         <?php if(isset($_GET['msg'])): ?>
             <div class="bg-green-50 border border-green-200 text-green-800 p-4 rounded-xl font-medium text-sm shadow-sm flex justify-between items-center mb-6">
                 <span><i class="fas fa-check-circle mr-2"></i><?= htmlspecialchars($_GET['msg']); ?></span>
@@ -456,14 +399,13 @@ $suppliers = $stmt->fetchAll();
             </div>
         <?php endif; ?>
 
-        <!-- SEARCH BAR & TABLE CARD -->
+        <!-- TABLE CARD -->
         <div class="card overflow-hidden border-red-200">
-            <!-- Search Bar -->
             <div class="p-4 border-b border-red-200/70 bg-red-50/30">
                 <form method="GET" action="" class="search-wrapper">
                     <div class="relative flex-1">
                         <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-red-400"></i>
-                        <input type="text" name="search" value="<?= htmlspecialchars($search); ?>" placeholder="Search by name, contact person, phone, email, status..." class="form-input pl-10" id="searchInput">
+                        <input type="text" name="search" value="<?= htmlspecialchars($search); ?>" placeholder="Search by name, contact person, phone, email, status..." class="form-input pl-10">
                     </div>
                     <button type="submit" class="btn-primary text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 bg-red-600 text-white hover:bg-red-700">
                         <i class="fas fa-search"></i> Search
@@ -482,7 +424,7 @@ $suppliers = $stmt->fetchAll();
                     <thead>
                         <tr class="bg-red-50/80 border-b border-red-200/70 text-red-700 text-[11px] font-bold uppercase tracking-wider">
                             <th class="p-4 w-20 text-center">ID</th>
-                            <th class="p-4">Supplier</th>
+                            <th class="p-4">Supplier Name</th>
                             <th class="p-4">Contact Person</th>
                             <th class="p-4">Contact Details</th>
                             <th class="p-4">Status</th>
@@ -491,7 +433,7 @@ $suppliers = $stmt->fetchAll();
                     </thead>
                     <tbody class="divide-y divide-red-100 text-sm">
                         <?php if (empty($suppliers)): ?>
-                            <tr><td colspan="6" class="p-12 text-center text-slate-400 font-medium">No suppliers found <?= !empty($search) ? 'matching your search' : 'in the database.'; ?></td></tr>
+                            <tr><td colspan="6" class="p-12 text-center text-slate-400 font-medium">No suppliers found.</td></tr>
                         <?php else: ?>
                             <?php foreach($suppliers as $s): ?>
                             <tr class="table-row-hover">
@@ -502,14 +444,14 @@ $suppliers = $stmt->fetchAll();
                                 </td>
                                 <td class="p-4 font-semibold text-slate-700"><?= htmlspecialchars($s['contact_person'] ?: '—'); ?></td>
                                 <td class="p-4 text-xs space-y-0.5 text-slate-600">
-                                    <div><i class="fas fa-phone-alt w-4 text-red-400 text-[10px]"></i> <?= htmlspecialchars($s['contact_number']); ?></div>
+                                    <div><i class="fas fa-phone-alt w-4 text-red-400 text-[10px]"></i> <?= htmlspecialchars($s['contact_number'] ?: 'N/A'); ?></div>
                                     <?php if($s['whatsapp']): ?><div><i class="fab fa-whatsapp w-4 text-green-500 text-[10px]"></i> <?= htmlspecialchars($s['whatsapp']); ?></div><?php endif; ?>
                                     <?php if($s['email']): ?><div><i class="fas fa-envelope w-4 text-red-400 text-[10px]"></i> <?= htmlspecialchars($s['email']); ?></div><?php endif; ?>
-                                    <?php if($s['land_number']): ?><div><i class="fas fa-phone w-4 text-red-400 text-[10px]"></i> <?= htmlspecialchars($s['land_number']); ?></div><?php endif; ?>
                                 </td>
-                                <td class="p-4"><span class="badge-status"><?= htmlspecialchars($s['status']); ?></span></td>
+                                <td class="p-4"><span class="badge-status"><?= htmlspecialchars($s['status'] ?: 'Active'); ?></span></td>
                                 <td class="p-4 text-center space-x-1 whitespace-nowrap">
                                     <button onclick='populateAndEdit(<?= json_encode($s); ?>)' class="btn-outline text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 inline-flex"><i class="fas fa-pen"></i> Edit</button>
+                                    <!-- SUPPLIER WISE PRINT BUTTON -->
                                     <button onclick='printSingleSupplier(<?= json_encode($s); ?>)' class="btn-primary text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 inline-flex"><i class="fas fa-print"></i> Print</button>
                                     <a href="supplier_module.php?action=delete&id=<?= $s['supplier_id']; ?>" onclick="return confirm('Delete this supplier permanently?')" class="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 inline-flex items-center gap-1"><i class="fas fa-trash-alt"></i></a>
                                 </td>
@@ -519,56 +461,26 @@ $suppliers = $stmt->fetchAll();
                     </tbody>
                 </table>
             </div>
-
-            <!-- PAGINATION (retains search) -->
-            <?php if($totalPages > 1): ?>
-            <div class="bg-red-50/80 px-4 py-3 border-t border-red-200/70 flex flex-wrap items-center justify-between text-xs text-slate-500 font-medium">
-                <span>Showing <?= $offset + 1; ?> – <?= min($totalRecords, $offset + $limit); ?> of <?= $totalRecords; ?></span>
-                <div class="flex items-center gap-1">
-                    <?php 
-                        $searchParam = !empty($search) ? '&search=' . urlencode($search) : '';
-                    ?>
-                    <?php if($page > 1): ?>
-                        <a href="?page=1<?= $searchParam; ?>" class="pagination-btn"><i class="fas fa-angle-double-left"></i></a>
-                        <a href="?page=<?= $page - 1; ?><?= $searchParam; ?>" class="pagination-btn"><i class="fas fa-angle-left"></i></a>
-                    <?php endif; ?>
-                    <span class="pagination-btn active"><?= $page; ?></span>
-                    <?php if($page < $totalPages): ?>
-                        <a href="?page=<?= $page + 1; ?><?= $searchParam; ?>" class="pagination-btn"><i class="fas fa-angle-right"></i></a>
-                        <a href="?page=<?= $totalPages; ?><?= $searchParam; ?>" class="pagination-btn"><i class="fas fa-angle-double-right"></i></a>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <?php endif; ?>
         </div>
     </main>
 
-    <!-- SCREEN FOOTER -->
-    <footer class="bg-white border-t border-red-200 no-print mt-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500">
-            <span class="text-red-600 font-semibold">ASB Group of Companies</span>
-            <span>Developed and Designed By <strong class="text-red-700">Vexel IT by Kavizz</strong></span>
-        </div>
-    </footer>
-
-    <!-- MODAL – unchanged -->
+    <!-- MODAL -->
     <div id="supplierModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
         <div id="modalPanel" class="modal-panel bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-red-200/80 overflow-hidden">
             <div class="bg-gradient-to-r from-red-700 to-red-800 px-6 py-4 flex justify-between items-center flex-shrink-0">
                 <h3 id="modalTitle" class="text-white font-bold text-base tracking-wider flex items-center gap-2">
-                    <i class="fas fa-pen-alt"></i>Supplier Entry
+                    <i class="fas fa-pen-alt"></i> Supplier Entry
                 </h3>
                 <button onclick="closeModal()" class="text-red-200 hover:text-white text-2xl leading-none transition">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="supplierForm" method="POST" class="space-y-4">
                     <input type="hidden" id="supplier_id" name="supplier_id">
-                    <input type="hidden" id="status" name="status">
                     <input type="hidden" id="system_id" name="system_id" value="">
                     <input type="hidden" id="fax_number" name="fax_number" value="">
 
                     <div>
-                        <label class="form-label"><i class="fas fa-building mr-1"></i> Corporate Name <span class="required">*</span></label>
+                        <label class="form-label">Corporate Name <span class="required">*</span></label>
                         <div class="input-group-icon">
                             <i class="fas fa-building icon"></i>
                             <input type="text" id="supplier_name" name="supplier_name" required class="form-input" placeholder="e.g. Apex Fabrics Ltd">
@@ -576,7 +488,7 @@ $suppliers = $stmt->fetchAll();
                     </div>
 
                     <div>
-                        <label class="form-label"><i class="fas fa-user mr-1"></i> Contact Person <span class="required">*</span></label>
+                        <label class="form-label">Contact Person <span class="required">*</span></label>
                         <div class="input-group-icon">
                             <i class="fas fa-user icon"></i>
                             <input type="text" id="contact_person" name="contact_person" required class="form-input" placeholder="e.g. John Doe">
@@ -584,7 +496,7 @@ $suppliers = $stmt->fetchAll();
                     </div>
 
                     <div>
-                        <label class="form-label"><i class="fas fa-phone-alt mr-1"></i> Mobile Number <span class="required">*</span></label>
+                        <label class="form-label">Mobile Number <span class="required">*</span></label>
                         <div class="input-group-icon">
                             <i class="fas fa-mobile-alt icon"></i>
                             <input type="text" id="contact_number" name="contact_number" required class="form-input" placeholder="947XXXXXXXX">
@@ -592,7 +504,7 @@ $suppliers = $stmt->fetchAll();
                     </div>
 
                     <div>
-                        <label class="form-label"><i class="fab fa-whatsapp mr-1"></i> WhatsApp Number</label>
+                        <label class="form-label">WhatsApp Number</label>
                         <div class="input-group-icon">
                             <i class="fab fa-whatsapp icon"></i>
                             <input type="text" id="whatsapp" name="whatsapp" class="form-input" placeholder="947XXXXXXXX">
@@ -600,7 +512,7 @@ $suppliers = $stmt->fetchAll();
                     </div>
 
                     <div>
-                        <label class="form-label"><i class="fas fa-phone mr-1"></i> Landline</label>
+                        <label class="form-label">Landline</label>
                         <div class="input-group-icon">
                             <i class="fas fa-phone icon"></i>
                             <input type="text" id="land_number" name="land_number" class="form-input" placeholder="9411XXXXXX">
@@ -608,7 +520,7 @@ $suppliers = $stmt->fetchAll();
                     </div>
 
                     <div>
-                        <label class="form-label"><i class="fas fa-envelope mr-1"></i> Email</label>
+                        <label class="form-label">Email</label>
                         <div class="input-group-icon">
                             <i class="fas fa-envelope icon"></i>
                             <input type="email" id="email" name="email" class="form-input" placeholder="info@company.com">
@@ -616,7 +528,15 @@ $suppliers = $stmt->fetchAll();
                     </div>
 
                     <div>
-                        <label class="form-label"><i class="fas fa-map-pin mr-1"></i> Address</label>
+                        <label class="form-label">Status</label>
+                        <div class="input-group-icon">
+                            <i class="fas fa-tag icon"></i>
+                            <input type="text" id="status" name="status" class="form-input" value="Active" placeholder="Active">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label">Address</label>
                         <div class="input-group-icon">
                             <i class="fas fa-map-pin icon" style="top: 0.9rem; transform: none;"></i>
                             <textarea id="address" name="address" rows="2" class="form-input" placeholder="Street, City, Country"></textarea>
@@ -625,17 +545,13 @@ $suppliers = $stmt->fetchAll();
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" onclick="closeModal()" class="btn-cancel">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-                <button type="button" onclick="document.getElementById('supplierForm').submit();" class="btn-save">
-                    <i class="fas fa-save"></i> Save
-                </button>
+                <button type="button" onclick="closeModal()" class="btn-cancel"><i class="fas fa-times"></i> Cancel</button>
+                <button type="button" onclick="document.getElementById('supplierForm').submit();" class="btn-save"><i class="fas fa-save"></i> Save</button>
             </div>
         </div>
     </div>
 
-    <!-- PRINT CONTAINER – unchanged -->
+    <!-- PRINT CONTAINER (A5 PAPER FORMAT) -->
     <div id="print-container" class="hidden">
         <div class="a5-sheet">
             <div class="print-header">
@@ -645,58 +561,37 @@ $suppliers = $stmt->fetchAll();
             <div class="print-body">
                 <div class="print-meta">
                     <span><span class="label">Form No:</span> <span class="p-form-no">ASB-SUP-2026-0001</span></span>
-                    <span><span class="label">Status:</span> <span class="p-status">New 01</span></span>
+                    <span><span class="label">Status:</span> <span class="p-status">Active</span></span>
                 </div>
 
                 <table class="print-table">
                     <tr>
                         <td class="field-label">Supplier Name</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-name-line1"></div>
-                            <div class="dotted-line p-name-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-name-line1"></div></td>
                     </tr>
                     <tr>
                         <td class="field-label">Contact Person</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-person-line1"></div>
-                            <div class="dotted-line p-person-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-person-line1"></div></td>
                     </tr>
                     <tr>
                         <td class="field-label">Mobile</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-mob-line1"></div>
-                            <div class="dotted-line p-mob-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-mob-line1"></div></td>
                     </tr>
                     <tr>
                         <td class="field-label">WhatsApp</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-whatsapp-line1"></div>
-                            <div class="dotted-line p-whatsapp-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-whatsapp-line1"></div></td>
                     </tr>
                     <tr>
                         <td class="field-label">Landline</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-land-line1"></div>
-                            <div class="dotted-line p-land-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-land-line1"></div></td>
                     </tr>
                     <tr>
                         <td class="field-label">Email</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-email-line1"></div>
-                            <div class="dotted-line p-email-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-email-line1"></div></td>
                     </tr>
                     <tr>
                         <td class="field-label">Address</td>
-                        <td class="field-value">
-                            <div class="dotted-line p-address-line1"></div>
-                            <div class="dotted-line p-address-line2"></div>
-                        </td>
+                        <td class="field-value"><div class="dotted-line p-address-line1"></div></td>
                     </tr>
                 </table>
 
@@ -704,7 +599,6 @@ $suppliers = $stmt->fetchAll();
                     <p><i class="fas fa-pen" style="margin-right: 4px;"></i>Handwritten validation logs (to be completed by supplier)</p>
                     <div class="dotted-line"></div>
                     <div class="dotted-line"></div>
-                    <div style="flex:1; min-height:8px;"></div>
                 </div>
 
                 <div class="print-signatures">
@@ -741,6 +635,7 @@ $suppliers = $stmt->fetchAll();
                 form.action = 'supplier_module.php?action=create';
                 form.reset();
                 document.getElementById('supplier_id').value = '';
+                document.getElementById('status').value = 'Active';
             }
         }
 
@@ -756,12 +651,12 @@ $suppliers = $stmt->fetchAll();
             document.getElementById('supplier_id').value = supplier.supplier_id;
             document.getElementById('supplier_name').value = supplier.supplier_name;
             document.getElementById('contact_person').value = supplier.contact_person || '';
-            document.getElementById('contact_number').value = supplier.contact_number;
+            document.getElementById('contact_number').value = supplier.contact_number || '';
             document.getElementById('whatsapp').value = supplier.whatsapp || '';
             document.getElementById('land_number').value = supplier.land_number || '';
             document.getElementById('email').value = supplier.email || '';
             document.getElementById('address').value = supplier.address || '';
-            document.getElementById('status').value = supplier.status;
+            document.getElementById('status').value = supplier.status || 'Active';
             document.getElementById('system_id').value = supplier.system_id || '';
             document.getElementById('fax_number').value = supplier.fax_number || '';
         }
@@ -788,10 +683,10 @@ $suppliers = $stmt->fetchAll();
             const formNo = generateFormNumber(supplier.supplier_id);
             populatePrintFields({
                 formNo: formNo,
-                status: supplier.status,
+                status: supplier.status || 'Active',
                 name: supplier.supplier_name,
                 person: supplier.contact_person || '',
-                mob: supplier.contact_number,
+                mob: supplier.contact_number || '',
                 whatsapp: supplier.whatsapp || '',
                 land: supplier.land_number || '',
                 email: supplier.email || '',
@@ -806,13 +701,7 @@ $suppliers = $stmt->fetchAll();
             populatePrintFields({
                 formNo: formNo,
                 status: "MANUAL ENTRY",
-                name: "",
-                person: "",
-                mob: "",
-                whatsapp: "",
-                land: "",
-                email: "",
-                address: ""
+                name: "", person: "", mob: "", whatsapp: "", land: "", email: "", address: ""
             });
             setTimeout(() => window.print(), 100);
         }
@@ -820,11 +709,6 @@ $suppliers = $stmt->fetchAll();
         modal.addEventListener('click', function(e) {
             if (e.target === modal) closeModal();
         });
-
-        // Optional: Auto-submit search on typing (if you want instant search, uncomment below)
-        // document.getElementById('searchInput').addEventListener('input', function() {
-        //     this.form.submit();
-        // });
     </script>
 </body>
 </html>

@@ -4,12 +4,14 @@ require_once 'includes/functions.php';
 
 startSession();
 
+// Redirect to dashboard if already logged in
 if (isLoggedIn()) {
     header('Location: dashboard.php');
     exit;
 }
 
 $error = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
@@ -17,24 +19,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($username) || empty($password)) {
         $error = 'Please enter both username and password.';
     } else {
-        $conn = getConnection();
-        $stmt = $conn->prepare("SELECT id, username, password, role FROM po_users WHERE username = ?");
-        $stmt->bind_param("s", $username);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $user = $result->fetch_assoc();
-        $stmt->close();
+        // Authenticate via functions.php (handles Bcrypt verification & plain text migration)
+        $user = authenticate($username, $password);
 
-        if ($user && $password === $user['password']) {
-            $_SESSION['user_id'] = $user['id'];
+        if ($user) {
+            // Set up active user session
+            $_SESSION['user_id']  = $user['id'];
             $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
+            $_SESSION['role']     = $user['role'];
 
+            // Update last_login timestamp in DB
+            $conn = getConnection();
             $updateStmt = $conn->prepare("UPDATE po_users SET last_login = NOW() WHERE id = ?");
             $updateStmt->bind_param("i", $user['id']);
             $updateStmt->execute();
             $updateStmt->close();
 
+            // Log entry into audit table
             logLogin($user['id']);
 
             header('Location: dashboard.php');
@@ -54,7 +55,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* === Full styles (glassmorphism, red theme) === */
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -224,13 +224,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="form-group">
             <label><i class="fas fa-user"></i> Username</label>
             <div class="input-wrapper">
-                <input type="text" name="username" placeholder="Enter username" required>
+                <input type="text" name="username" placeholder="Enter username" required autocomplete="username">
             </div>
         </div>
         <div class="form-group">
             <label><i class="fas fa-lock"></i> Password</label>
             <div class="input-wrapper">
-                <input type="password" name="password" id="password" placeholder="Enter password" required>
+                <input type="password" name="password" id="password" placeholder="Enter password" required autocomplete="current-password">
                 <button type="button" class="toggle-password" id="togglePassword" aria-label="Toggle password visibility">
                     <i class="fas fa-eye"></i>
                 </button>
