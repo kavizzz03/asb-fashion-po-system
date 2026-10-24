@@ -9,7 +9,7 @@ $po_id = isset($_GET['po_id']) ? (int)$_GET['po_id'] : 0;
 // 1. Fetch Master PO Structural Header Details
 $po_query = "SELECT ph.*, s.supplier_name 
              FROM po_header ph
-             LEFT JOIN return_qc.suppliers s ON ph.supplier_id = s.supplier_id
+             LEFT JOIN suppliers s ON ph.supplier_id = s.supplier_id
              WHERE ph.po_id = ?";
 
 $stmt = $conn->prepare($po_query);
@@ -41,10 +41,11 @@ $stmt->execute();
 $items = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-// 3. Fetch All Goods Received Notes (GRN Batches) & Driver Logs tied to this PO
-$grn_query = "SELECT gh.grn_id, gh.grn_number, gh.received_date, gh.delivered_by, gh.vehicle_no, gh.total_box_count,
-                     (SELECT SUM(gi.qty_received) FROM grn_items gi WHERE gi.grn_id = gh.grn_id) as batch_sum
+// 3. Fetch All Goods Received Notes (GRN Batches), Floors, & Driver Logs tied to this PO
+$grn_query = "SELECT gh.grn_id, gh.grn_number, gh.received_date, gh.delivered_by, gh.vehicle_no, gh.total_box_count, f.floor_name,
+                    (SELECT SUM(gi.qty_received) FROM grn_items gi WHERE gi.grn_id = gh.grn_id) as batch_sum
               FROM grn_header gh
+              LEFT JOIN floors f ON gh.floor_id = f.floor_id
               WHERE gh.po_id = ?
               ORDER BY gh.received_date DESC";
 
@@ -61,6 +62,7 @@ $stmt->close();
 $grand_ordered_qty = 0;
 $grand_received_qty = 0;
 $driver_registry = [];
+$floor_registry = [];
 
 foreach ($items as $item) {
     $grand_ordered_qty += $item['quantity'];
@@ -73,8 +75,12 @@ foreach ($shipments as $ship) {
     if (!empty($ship['delivered_by'])) {
         $driver_registry[] = htmlspecialchars($ship['delivered_by']) . " (" . htmlspecialchars($ship['vehicle_no'] ?? 'N/A') . ")";
     }
+    if (!empty($ship['floor_name'])) {
+        $floor_registry[] = htmlspecialchars($ship['floor_name']);
+    }
 }
 $all_drivers = !empty($driver_registry) ? implode(', ', array_unique($driver_registry)) : 'No Logistics Cargo Logs Tracked';
+$all_floors = !empty($floor_registry) ? implode(', ', array_unique($floor_registry)) : 'Not Assigned';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -179,6 +185,7 @@ $all_drivers = !empty($driver_registry) ? implode(', ', array_unique($driver_reg
         </div>
         <div class="info-block">
             <table>
+                <tr><td class="label">Destination Floor(s):</td><td><span style="background:#ffebee; color:#b71c1c; padding:2px 6px; border-radius:3px; font-weight:bold;"><?= $all_floors; ?></span></td></tr>
                 <tr><td class="label">Generation Time:</td><td><?= date('Y-m-d H:i:s'); ?></td></tr>
                 <tr><td class="label">All Time Drivers Logged:</td><td style="font-weight:600; font-style:italic; color:#333; max-width:250px;"><?= $all_drivers; ?></td></tr>
                 <tr><td class="label">Total GRN Batches Tied:</td><td><strong><?= count($shipments); ?> Inbound Cargo Run(s)</strong></td></tr>
@@ -224,18 +231,19 @@ $all_drivers = !empty($driver_registry) ? implode(', ', array_unique($driver_reg
         <thead>
             <tr>
                 <th style="width: 30px; text-align: center;">#</th>
-                <th style="width: 130px;">GRN Voucher Number</th>
-                <th style="width: 120px;">Processing Date</th>
-                <th>Driver Name / Logistics Personnel (All Time)</th>
-                <th style="width: 110px;">Vehicle Reg #</th>
-                <th style="width: 100px; text-align: right;">Box Count</th>
-                <th style="width: 110px; text-align: right;">Batch Volume</th>
+                <th style="width: 120px;">GRN Voucher Number</th>
+                <th style="width: 110px;">Processing Date</th>
+                <th style="width: 100px;">Target Floor</th>
+                <th>Driver Name / Logistics Personnel</th>
+                <th style="width: 100px;">Vehicle Reg #</th>
+                <th style="width: 80px; text-align: right;">Boxes</th>
+                <th style="width: 90px; text-align: right;">Batch Vol</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($shipments)): ?>
                 <tr>
-                    <td colspan="7" style="text-align: center; color: #888; font-style: italic; padding: 10px;">No inbound stock allocations processing matches found for this order.</td>
+                    <td colspan="8" style="text-align: center; color: #888; font-style: italic; padding: 10px;">No inbound stock allocations processing matches found for this order.</td>
                 </tr>
             <?php else: 
                 $s_idx = 1;
@@ -244,6 +252,7 @@ $all_drivers = !empty($driver_registry) ? implode(', ', array_unique($driver_reg
                         <td style="text-align: center; color: #666;"><?= $s_idx++; ?></td>
                         <td><strong style="color: #b71c1c;"><?= htmlspecialchars($ship['grn_number']); ?></strong></td>
                         <td><?= date('Y-m-d H:i', strtotime($ship['received_date'])); ?></td>
+                        <td><strong style="color: #b71c1c;"><?= htmlspecialchars($ship['floor_name'] ?? '—'); ?></strong></td>
                         <td><strong style="color: #333;"><?= htmlspecialchars($ship['delivered_by'] ?? 'N/A'); ?></strong></td>
                         <td><?= htmlspecialchars($ship['vehicle_no'] ?? 'N/A'); ?></td>
                         <td style="text-align: right;"><?= number_format($ship['total_box_count'] ?? 0); ?> Ctn</td>

@@ -114,6 +114,7 @@ function ensureAllTablesExist($conn) {
         `supplier_name` VARCHAR(100) DEFAULT NULL,
         `purchase_date` DATE DEFAULT NULL,
         `attention` VARCHAR(255) DEFAULT NULL,
+        `season_type` VARCHAR(50) DEFAULT 'Non-Season',
         `remarks` TEXT DEFAULT NULL,
         `expected_delivery_date` DATE DEFAULT NULL,
         `status` VARCHAR(50) DEFAULT 'Pending',
@@ -313,14 +314,15 @@ if ((isset($_GET['ajax_action']) || isset($_POST['ajax_action'])) && (($_GET['aj
                 $supplier_name = trim($_POST['supplier_name'] ?? '');
                 $purchase_date = $_POST['purchase_date'] ?? date('Y-m-d');
                 $attention = trim($_POST['attention'] ?? '');
+                $season_type = trim($_POST['season_type'] ?? 'Non-Season');
                 $remarks = trim($_POST['remarks'] ?? '');
                 $expected_delivery_date = $_POST['expected_delivery_date'] ?: null;
                 $status = trim($_POST['status'] ?? 'Pending');
 
                 clearDraftBySession($conn, $session_id);
 
-                $insert = $conn->prepare("INSERT INTO po_draft (session_id, supplier_id, supplier_name, purchase_date, attention, remarks, expected_delivery_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                $insert->bind_param("sissssss", $session_id, $supplier_id, $supplier_name, $purchase_date, $attention, $remarks, $expected_delivery_date, $status);
+                $insert = $conn->prepare("INSERT INTO po_draft (session_id, supplier_id, supplier_name, purchase_date, attention, season_type, remarks, expected_delivery_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $insert->bind_param("sisssssss", $session_id, $supplier_id, $supplier_name, $purchase_date, $attention, $season_type, $remarks, $expected_delivery_date, $status);
                 $insert->execute();
                 $draft_id = $insert->insert_id;
                 $insert->close();
@@ -403,7 +405,12 @@ if (isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'save_new_po') {
         $supplier_id = (int)($_POST['supplier_id'] ?? 0);
         $purchase_date = $_POST['purchase_date'] ?? '';
         $attention = trim($_POST['attention'] ?? '');
-        $remarks = trim($_POST['remarks'] ?? '');
+        $season_type = trim($_POST['season_type'] ?? 'Non-Season');
+        $raw_remarks = trim($_POST['remarks'] ?? '');
+        
+        // Combine Season Type and user remarks into the remarks field
+        $remarks = "[" . $season_type . "] " . $raw_remarks;
+
         $expected_delivery_date = $_POST['expected_delivery_date'] ?: null;
         $status = trim($_POST['status'] ?? 'Pending');
 
@@ -684,8 +691,12 @@ include ROOT_PATH . 'includes/sidebar.php';
                 </div>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
             <input type="text" id="attention" placeholder="Attention (Contact person / Department)" class="asb-input-sm">
+            <select id="season_type" class="asb-input-sm bg-white font-semibold text-slate-700">
+                <option value="Non-Season">Non-Season</option>
+                <option value="Season">Season</option>
+            </select>
             <input type="text" id="remarks" placeholder="Order remarks..." class="asb-input-sm">
         </div>
     </div>
@@ -859,7 +870,7 @@ $(document).ready(function() {
 
     $('#btn-open-drafts').click(fetchAndShowDraftsModal);
 
-    $(document).on('input change', '.matrix-field, #purchase_date, #expected_delivery_date, #status, #attention, #remarks', function() {
+    $(document).on('input change', '.matrix-field, #purchase_date, #expected_delivery_date, #status, #attention, #season_type, #remarks', function() {
         calculateMatrixTotals();
         triggerAutoSaveDebounced();
     });
@@ -954,6 +965,7 @@ $(document).ready(function() {
         $('#modalSummary').html(`
             <div><strong>Supplier:</strong> ${$('#supplier_search_input').val()}</div>
             <div><strong>Purchase Date:</strong> ${$('#purchase_date').val()}</div>
+            <div><strong>Season Type:</strong> ${$('#season_type').val()}</div>
             <div><strong>Total Line Items:</strong> ${validRows.length}</div>
             <div><strong>Total Order Units:</strong> ${totalQty}</div>
             <div><strong>Total Value:</strong> LKR ${totalCost.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
@@ -965,8 +977,7 @@ $(document).ready(function() {
 });
 
 function triggerSearchInput($elem) {
-    $elem.trigger('focus');
-    $elem.trigger('input');
+    $elem.trigger('focus');$elem.trigger('input');
 }
 
 function loadMasterOptions() {
@@ -979,8 +990,7 @@ function loadMasterOptions() {
 
 function initSupplierSearch() {
     $('#supplier_search_input').on('input focus', function() {
-        let q = $(this).val().trim();
-        $.getJSON(window.location.href, { ajax_action: 'get_suppliers_direct', search: q }, function(res) {
+        let q = $(this).val().trim();$.getJSON(window.location.href, { ajax_action: 'get_suppliers_direct', search: q }, function(res) {
             if (res.success && res.results.length > 0) {
                 let html = '';
                 res.results.forEach(s => {
@@ -994,10 +1004,7 @@ function initSupplierSearch() {
     });
 
     $(document).on('click', '.supplier-opt', function() {
-        let $opt = $(this).closest('.supplier-opt');
-        $('#supplier_id').val($opt.data('id'));
-        $('#supplier_search_input').val($opt.data('name'));
-        $('#supplier_dropdown').addClass('hidden');
+        let $opt = $(this).closest('.supplier-opt');$('#supplier_id').val($opt.data('id'));$('#supplier_search_input').val($opt.data('name'));$('#supplier_dropdown').addClass('hidden');
         triggerAutoSaveDebounced();
     });
 }
@@ -1053,14 +1060,13 @@ function addMatrixRows(count = 1, dataArray = null) {
 }
 
 function bindDirectItemSearch($tr) {
-    let $codeInp = $tr.find('.item-code');
-    let $nameInp = $tr.find('.item-name');
-    let $codeDd = $tr.find('.item-code-dd');
-    let $nameDd = $tr.find('.item-name-dd');
+    let $codeInp =$tr.find('.item-code');
+    let $nameInp =$tr.find('.item-name');
+    let $codeDd =$tr.find('.item-code-dd');
+    let $nameDd =$tr.find('.item-name-dd');
 
     $codeInp.on('focus', function() {
-        let $prevTr = $tr.prev('tr');
-        $('.inherit-toast').remove();
+        let $prevTr = $tr.prev('tr');$('.inherit-toast').remove();
 
         if ($prevTr.length > 0 && !$codeInp.val() && !$nameInp.val()) {
             let prevName = $prevTr.find('.item-name').val();
@@ -1078,8 +1084,7 @@ function bindDirectItemSearch($tr) {
 
                 $tr.find('.btn-confirm-inherit').on('click', function(e) {
                     e.stopPropagation();
-                    copyAboveRowDetails($tr, $prevTr);
-                    $('.inherit-toast').remove();
+                    copyAboveRowDetails($tr, $prevTr);$('.inherit-toast').remove();
                 });
 
                 $tr.find('.btn-cancel-inherit').on('click', function(e) {
@@ -1090,11 +1095,8 @@ function bindDirectItemSearch($tr) {
         }
     });
 
-    $codeInp.on('input', function() {
-        $('.inherit-toast').remove();
-        let q = $(this).val().trim();
-        
-        $.getJSON(window.location.href, { ajax_action: 'search_item_code_direct', search: q }, function(res) {
+    $codeInp.on('input', function() {$('.inherit-toast').remove();
+        let q = $(this).val().trim();$.getJSON(window.location.href, { ajax_action: 'search_item_code_direct', search: q }, function(res) {
             if (res.success && res.results.length > 0) {
                 let html = '';
                 res.results.forEach(item => {
@@ -1111,8 +1113,7 @@ function bindDirectItemSearch($tr) {
     });
 
     $nameInp.on('input focus', function() {
-        let q = $(this).val().trim();
-        $.getJSON(window.location.href, { ajax_action: 'search_name_suggestions', search: q }, function(res) {
+        let q = $(this).val().trim();$.getJSON(window.location.href, { ajax_action: 'search_name_suggestions', search: q }, function(res) {
             if (res.success && res.results.length > 0) {
                 let html = '';
                 res.results.forEach(sug => {
@@ -1130,7 +1131,7 @@ function bindDirectItemSearch($tr) {
     });
 }
 
-function copyAboveRowDetails($tr, $prevTr) {
+function copyAboveRowDetails($tr,$prevTr) {
     let prevName = $prevTr.find('.item-name').val();
     let prevDept = $prevTr.find('.sel-dept').val();
     let prevSubDept = $prevTr.find('.sel-subdept').val();
@@ -1215,6 +1216,7 @@ function triggerAutoSaveDebounced() {
         expected_delivery_date: $('#expected_delivery_date').val(),
         status: $('#status').val(),
         attention: $('#attention').val(),
+        season_type: $('#season_type').val(),
         remarks: $('#remarks').val(),
         items: getValidItems()
     };
@@ -1234,6 +1236,7 @@ function executeAutoSave() {
     formData.append('expected_delivery_date', $('#expected_delivery_date').val());
     formData.append('status', $('#status').val());
     formData.append('attention', $('#attention').val());
+    formData.append('season_type', $('#season_type').val());
     formData.append('remarks', $('#remarks').val());
     formData.append('items_json', JSON.stringify(validItems));
 
@@ -1293,7 +1296,19 @@ function populateFormAndMatrix(data) {
     if (data.expected_delivery_date) $('#expected_delivery_date').val(data.expected_delivery_date);
     if (data.status) $('#status').val(data.status);
     if (data.attention) $('#attention').val(data.attention);
-    if (data.remarks) $('#remarks').val(data.remarks);
+    if (data.season_type) $('#season_type').val(data.season_type);
+    
+    // Extract season type tag from remarks if loaded from DB where season_type might be embedded
+    let remarksVal = data.remarks || '';
+    if (remarksVal.startsWith('[Season] ')) {
+        $('#season_type').val('Season');
+        $('#remarks').val(remarksVal.replace('[Season] ', ''));
+    } else if (remarksVal.startsWith('[Non-Season] ')) {
+        $('#season_type').val('Non-Season');
+        $('#remarks').val(remarksVal.replace('[Non-Season] ', ''));
+    } else {
+        $('#remarks').val(remarksVal);
+    }
 
     if (data.items && data.items.length > 0) {
         addMatrixRows(data.items.length, data.items);
@@ -1310,7 +1325,7 @@ function fetchAndShowDraftsModal() {
                 html += `<div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex justify-between items-center hover:bg-slate-100 cursor-pointer text-xs" onclick="restoreSpecificDraft(${d.draft_id})">
                             <div>
                                 <div class="font-bold text-slate-800">${d.supplier_name || 'Unassigned Supplier'}</div>
-                                <div class="text-[11px] text-slate-500">Date: ${d.purchase_date || 'N/A'} | Items: ${d.item_count}</div>
+                                <div class="text-[11px] text-slate-500">Date: ${d.purchase_date || 'N/A'} | Season: ${d.season_type || 'Non-Season'} | Items: ${d.item_count}</div>
                             </div>
                             <button class="px-2 py-1 bg-indigo-600 text-white font-bold rounded text-[10px]">Load</button>
                          </div>`;
@@ -1351,10 +1366,11 @@ function submitFinalPO() {
     formData.append('expected_delivery_date', $('#expected_delivery_date').val());
     formData.append('status', $('#status').val());
     formData.append('attention', $('#attention').val());
+    formData.append('season_type', $('#season_type').val());
     formData.append('remarks', $('#remarks').val());
     formData.append('items_json', JSON.stringify(validItems));
 
-    let $btn = $('#btn-submit-po');
+    let $btn =$('#btn-submit-po');
     $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Processing PO...');
 
     $.ajax({
