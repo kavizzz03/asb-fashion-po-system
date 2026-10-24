@@ -7,11 +7,12 @@ $conn = getConnection();
 $grn_id = isset($_GET['grn_id']) ? (int)$_GET['grn_id'] : 0;
 $type = isset($_GET['type']) ? $_GET['type'] : 'supplier'; // 'supplier' or 'internal'
 
-// Fetch the GRN Header along with Master PO Details, Cross-Database Supplier Identity, and tracking properties
-$query = "SELECT gh.*, ph.po_number, ph.purchase_date, s.supplier_name 
+// Fetch the GRN Header along with Master PO Details, Floor Name, and Supplier Identity
+$query = "SELECT gh.*, ph.po_number, ph.purchase_date, ph.attention, s.supplier_name, f.floor_name 
           FROM grn_header gh
           INNER JOIN po_header ph ON gh.po_id = ph.po_id
-          LEFT JOIN return_qc.suppliers s ON ph.supplier_id = s.supplier_id
+          LEFT JOIN suppliers s ON ph.supplier_id = s.supplier_id
+          LEFT JOIN floors f ON gh.floor_id = f.floor_id
           WHERE gh.grn_id = ?";
 
 $stmt = $conn->prepare($query);
@@ -101,7 +102,7 @@ if ($grand_remaining_bal < 0) $grand_remaining_bal = 0;
         .summary-card.accent .value { color: #b71c1c; }
         .summary-card .label { font-size: 9px; text-transform: uppercase; color: #555; font-weight: 600; letter-spacing: 0.3px; }
 
-        /* Cleaned Signature Blocks - Removed Seals, Kept Pure Corporate Base Lines */
+        /* Cleaned Signature Blocks */
         .signature-section { margin-top: 35px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; text-align: center; page-break-inside: avoid; }
         .sig-box { border-top: 1px dashed #b71c1c; padding-top: 6px; font-size: 11px; color: #333; }
         .signature-gap { height: 45px; }
@@ -141,13 +142,13 @@ if ($grand_remaining_bal < 0) $grand_remaining_bal = 0;
             <p class="brand-subtitle">Head Office Warehouse Complex • Quality &amp; Inventory Logistics Control</p>
         </div>
         <div style="text-align: right; color: #666; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-            System Registry Record
+            <?= $type === 'supplier' ? 'Supplier Copy' : 'Gate Pass Copy'; ?>
         </div>
     </div>
 
     <!-- Dynamic Title Flag Area -->
     <div class="report-title">
-        Goods Received Note &amp; Complete Procurement Audit Statement
+        <?= $type === 'supplier' ? 'Goods Received Note &amp; Supplier Audit Statement' : 'Warehouse Inward Gate Pass &amp; Shipment Verification'; ?>
     </div>
 
     <!-- Metadata Grid Context -->
@@ -156,17 +157,19 @@ if ($grand_remaining_bal < 0) $grand_remaining_bal = 0;
             <table>
                 <tr><td class="label">GRN Voucher Number:</td><td><strong style="color:#b71c1c; font-size:12px;"><?= htmlspecialchars($grn['grn_number']); ?></strong></td></tr>
                 <tr><td class="label">Associated PO Ref:</td><td style="font-weight:600; color:#222;"><?= htmlspecialchars($grn['po_number']); ?></td></tr>
+                <tr><td class="label">Destination Floor:</td><td><span style="background:#ffebee; color:#b71c1c; padding:2px 8px; border-radius:3px; font-weight:bold;"><?= htmlspecialchars($grn['floor_name'] ?? 'Not Specified'); ?></span></td></tr>
+                <tr><td class="label">Order By:</td><td><strong style="color:#b71c1c;"><?= htmlspecialchars($grn['attention'] ?? '—'); ?></strong></td></tr>
                 <tr><td class="label">Supplier Identity:</td><td><?= htmlspecialchars($grn['supplier_name'] ?? 'Not Specified'); ?></td></tr>
-                <tr><td class="label">Delivery Note / Invoice:</td><td style="font-weight:600;"><?= htmlspecialchars($grn['delivery_note_no']); ?></td></tr>
-                <tr><td class="label">Total Carton Box Count:</td><td><strong><?= htmlspecialchars($grn['total_box_count'] ?? '0'); ?> Boxes</strong></td></tr>
             </table>
         </div>
         <div class="info-block">
             <table>
+                <tr><td class="label">Delivery Note / Invoice:</td><td style="font-weight:600;"><?= htmlspecialchars($grn['delivery_note_no']); ?></td></tr>
+                <tr><td class="label">Total Carton Boxes:</td><td><strong><?= htmlspecialchars($grn['total_box_count'] ?? '0'); ?> Boxes</strong></td></tr>
                 <tr><td class="label">Transaction Date:</td><td><?= date('Y-m-d H:i', strtotime($grn['received_date'] ?? date('Y-m-d H:i:s'))); ?></td></tr>
                 <tr><td class="label">Vehicle Registration #:</td><td><strong style="color:#222;"><?= htmlspecialchars($grn['vehicle_no'] ?? 'N/A'); ?></strong></td></tr>
                 <tr><td class="label">Goods Delivered By:</td><td><strong><?= htmlspecialchars($grn['delivered_by'] ?? 'N/A'); ?></strong></td></tr>
-                <tr><td class="label">Receiving Memo Remarks:</td><td style="font-style: italic; color:#555;"><?= htmlspecialchars($grn['remarks'] ? $grn['remarks'] : 'N/A'); ?></td></tr>
+                <tr><td class="label">Receiving Remarks:</td><td style="font-style: italic; color:#555;"><?= htmlspecialchars($grn['remarks'] ? $grn['remarks'] : 'N/A'); ?></td></tr>
             </table>
         </div>
     </div>
@@ -228,7 +231,7 @@ if ($grand_remaining_bal < 0) $grand_remaining_bal = 0;
         </div>
     </div>
 
-    <!-- Accountability Validation Footers (Pure Signature Tracks) -->
+    <!-- Accountability Validation Footers -->
     <div class="signature-section">
         <div>
             <div class="signature-gap"></div>

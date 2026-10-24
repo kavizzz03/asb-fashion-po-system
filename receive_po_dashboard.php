@@ -3,126 +3,177 @@ if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
 
-$page_title = 'ASB Fashion | Item Receiving Dashboard';$page = 'receiving';
+$page_title = 'ASB Fashion | Item Receiving Dashboard';
+$page = 'receiving';
 
 $conn = getConnection();
 
+// ========== FETCH FLOORS FOR HEADER SELECTION ==========
+$floor_result = $conn->query("SELECT floor_id, floor_name FROM floors ORDER BY floor_name ASC");
+$floors_list = $floor_result ? $floor_result->fetch_all(MYSQLI_ASSOC) : [];
+
 // ========== FILTER & PAGINATION ==========
-$search_filter = isset($_GET['search']) ? trim($_GET['search']) : '';
-$date_filter   = isset($_GET['date_filter']) ? $_GET['date_filter'] : '';$items_per_page = 10;
-$current_page = isset($_GET['page_num']) ? (int)$_GET['page_num'] : 1;
-$offset = ($current_page - 1) *$items_per_page;
+$search_filter  = isset($_GET['search']) ? trim($_GET['search']) : '';
+$date_filter    = isset($_GET['date_filter']) ? $_GET['date_filter'] : '';
+$status_filter  = isset($_GET['status_filter']) ? $_GET['status_filter'] : 'Pending'; // Default to Pending
+$items_per_page = 15;
+$current_page   = isset($_GET['page_num']) ? (int)$_GET['page_num'] : 1;
+if ($current_page < 1) $current_page = 1;
+$offset         = ($current_page - 1) * $items_per_page;
 
 // ========== PROCESS GRN SUBMISSION ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_grn'])) {
-    $po_id = (int)$_POST['po_id'];
-    $delivery_note =$conn->real_escape_string($_POST['delivery_note_no']);$remarks = $conn->real_escape_string($_POST['remarks']);
-    $vehicle_no =$conn->real_escape_string($_POST['vehicle_no']);$delivered_by = $conn->real_escape_string($_POST['delivered_by']);
+    $po_id           = (int)$_POST['po_id'];
+    $floor_id        = (int)$_POST['floor_id'];
+    $delivery_note   = $conn->real_escape_string($_POST['delivery_note_no']);
+    $remarks         = $conn->real_escape_string($_POST['remarks']);
+    $vehicle_no      = $conn->real_escape_string($_POST['vehicle_no']);
+    $delivered_by    = $conn->real_escape_string($_POST['delivered_by']);
     $total_box_count = (int)$_POST['total_box_count'];
     
-    $quantities =$_POST['receive_qty']; // Array indexed by po_item_id
+    $quantities = $_POST['receive_qty'] ?? []; // Array indexed by po_item_id
     
+    if ($floor_id <= 0) {
+        $_SESSION['error'] = "Please select a target floor/section for this shipment.";
+        header("Location: receive_po_dashboard.php");
+        exit;
+    }
+
     try {
-        $conn->begin_transaction();$grn_no = "GRN-" . date('Ymd') . "-" . rand(1000, 9999);
+        $conn->begin_transaction();
+        $grn_no = "GRN-" . date('Ymd') . "-" . rand(1000, 9999);
         
-        // Insert GRN header
-        $stmt =$conn->prepare("INSERT INTO grn_header (grn_number, po_id, delivery_note_no, remarks, vehicle_no, delivered_by, total_box_count) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sissssi", $grn_no,$po_id, $delivery_note,$remarks, $vehicle_no,$delivered_by, $total_box_count);$stmt->execute();
-        $grn_id =$conn->insert_id;
-        $stmt->close();$all_items_completed = true;
-        foreach ($quantities as $po_item_id =>$qty_received) {
-            $po_item_id = (int)$po_item_id;
+        // Insert GRN header with floor_id
+        $stmt = $conn->prepare("INSERT INTO grn_header (grn_number, po_id, floor_id, delivery_note_no, remarks, vehicle_no, delivered_by, total_box_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("siissssi", $grn_no, $po_id, $floor_id, $delivery_note, $remarks, $vehicle_no, $delivered_by, $total_box_count);
+        $stmt->execute();
+        $grn_id = $conn->insert_id;
+        $stmt->close();
+
+        $all_items_completed = true;
+        foreach ($quantities as $po_item_id => $qty_received) {
+            $po_item_id   = (int)$po_item_id;
             $qty_received = (int)$qty_received;
             if ($qty_received <= 0) continue;
 
-            $st =$conn->prepare("SELECT item_id, quantity, received_qty FROM po_items WHERE po_item_id = ?");
+            $st = $conn->prepare("SELECT item_id, quantity, received_qty FROM po_items WHERE po_item_id = ?");
             $st->bind_param("i", $po_item_id);
-            $st->execute();$rowItem = $st->get_result()->fetch_assoc();$st->close();
+            $st->execute();
+            $rowItem = $st->get_result()->fetch_assoc();
+            $st->close();
 
-            $new_total_received = $rowItem['received_qty'] +$qty_received;
-            if ($new_total_received >$rowItem['quantity']) {
+            $new_total_received = $rowItem['received_qty'] + $qty_received;
+            if ($new_total_received > $rowItem['quantity']) {
                 throw new Exception("Quantity exceeds outstanding balance for item.");
             }
 
-            $inst =$conn->prepare("INSERT INTO grn_items (grn_id, po_item_id, item_id, qty_received) VALUES (?, ?, ?, ?)");
-            $inst->bind_param("iiii", $grn_id,$po_item_id, $rowItem['item_id'],$qty_received);
-            $inst->execute();$inst->close();
+            $inst = $conn->prepare("INSERT INTO grn_items (grn_id, po_item_id, item_id, qty_received) VALUES (?, ?, ?, ?)");
+            $inst->bind_param("iiii", $grn_id, $po_item_id, $rowItem['item_id'], $qty_received);
+            $inst->execute();
+            $inst->close();
 
-            $upd =$conn->prepare("UPDATE po_items SET received_qty = ? WHERE po_item_id = ?");
-            $upd->bind_param("ii", $new_total_received,$po_item_id);
-            $upd->execute();$upd->close();
+            $upd = $conn->prepare("UPDATE po_items SET received_qty = ? WHERE po_item_id = ?");
+            $upd->bind_param("ii", $new_total_received, $po_item_id);
+            $upd->execute();
+            $upd->close();
 
-            if ($new_total_received < $rowItem['quantity']) {$all_items_completed = false;
+            if ($new_total_received < $rowItem['quantity']) {
+                $all_items_completed = false;
             }
         }
 
-        $finalStatus =$all_items_completed ? 'Completed' : 'Received';
-        $updHeader =$conn->prepare("UPDATE po_header SET status = ? WHERE po_id = ?");
-        $updHeader->bind_param("si", $finalStatus, $po_id);$updHeader->execute();
-        $updHeader->close();$conn->commit();
+        $finalStatus = $all_items_completed ? 'Completed' : 'Received';
+        $updHeader = $conn->prepare("UPDATE po_header SET status = ? WHERE po_id = ?");
+        $updHeader->bind_param("si", $finalStatus, $po_id);
+        $updHeader->execute();
+        $updHeader->close();
+
+        $conn->commit();
         
-        $_SESSION['print_grn_id'] =$grn_id;
+        $_SESSION['print_grn_id'] = $grn_id;
         $_SESSION['success'] = "
             <div style='font-size: 16px; margin-bottom: 12px;'><strong>📦 Goods Received Note ($grn_no) Added Successfully!</strong></div>
             <div style='margin-bottom: 15px;'>PO status updated to: <span style='background:#d32f2f; color:#fff; padding:2px 8px; border-radius:3px; font-weight:bold; font-size:11px;'>$finalStatus</span></div>
             <div style='display:flex; gap:10px; flex-wrap:wrap;'>
-                <a href='print_grn.php?grn_id=$grn_id&type=supplier' target='_blank' style='background:#d32f2f; color:#fff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition: 0.2s;'>🖨️ Print Supplier Copy</a>
-                <a href='print_grn.php?grn_id=$grn_id&type=internal' target='_blank' style='background:#333; color:#fff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition: 0.2s;'>📋 Print Gate Pass Copy</a>
+                <a href='print_grn.php?grn_id=$grn_id&type=supplier' target='_blank' style='background:#d32f2f; color:#fff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-flex; align-items:center; gap:6px;'>🖨️ Print Supplier Copy</a>
+                <a href='print_grn.php?grn_id=$grn_id&type=internal' target='_blank' style='background:#333; color:#fff; text-decoration:none; padding:10px 16px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-flex; align-items:center; gap:6px;'>📋 Print Gate Pass Copy</a>
             </div>
         ";
-    } catch (Exception $e) {$conn->rollback();
-        $_SESSION['error'] =$e->getMessage();
+    } catch (Exception $e) {
+        $conn->rollback();
+        $_SESSION['error'] = $e->getMessage();
     }
     header("Location: receive_po_dashboard.php");
     exit;
 }
 
 // ========== BUILD QUERY WITH FILTERS ==========
-$where_clauses = ["h.status NOT IN ('Cancelled', 'Completed')"];
+$where_clauses = [];
 $types = "";
 $params = [];
 
-if (!empty($search_filter)) {$where_clauses[] = "(h.po_number LIKE ? OR s.supplier_name LIKE ?)";
-    $search_param = "\%" . $search_filter . "%";
-    $params[] =$search_param;
-    $params[] =$search_param;
-    $types .= "ss";
+// Status Filter Handling
+if ($status_filter === 'All_Active') {
+    $where_clauses[] = "h.status NOT IN ('Cancelled', 'Completed')";
+} elseif ($status_filter === 'All') {
+    // Show all records without status restriction
+} elseif (!empty($status_filter)) {
+    $where_clauses[] = "h.status = ?";
+    $params[] = $status_filter;
+    $types .= "s";
+} else {
+    $where_clauses[] = "h.status NOT IN ('Cancelled', 'Completed')";
 }
-if (!empty($date_filter)) {$where_clauses[] = "h.purchase_date = ?";
-    $params[] =$date_filter;
+
+if (!empty($search_filter)) {
+    $where_clauses[] = "(h.po_number LIKE ? OR s.supplier_name LIKE ? OR h.attention LIKE ?)";
+    $search_param = "%" . $search_filter . "%";
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $types .= "sss";
+}
+
+if (!empty($date_filter)) {
+    $where_clauses[] = "h.purchase_date = ?";
+    $params[] = $date_filter;
     $types .= "s";
 }
-$where_str = implode(" AND ", $where_clauses);
+
+$where_str = !empty($where_clauses) ? "WHERE " . implode(" AND ", $where_clauses) : "";
 
 // Count total (for pagination)
-$count_sql = "SELECT COUNT(DISTINCT h.po_id) FROM po_header h LEFT JOIN return_qc.suppliers s ON h.supplier_id = s.supplier_id WHERE $where_str";
+$count_sql = "SELECT COUNT(DISTINCT h.po_id) FROM po_header h LEFT JOIN suppliers s ON h.supplier_id = s.supplier_id $where_str";
 $count_stmt = $conn->prepare($count_sql);
-if (!empty($params)) $count_stmt->bind_param($types, ...$params);$count_stmt->execute();
-$total_pos =$count_stmt->get_result()->fetch_row()[0];
-$count_stmt->close();$total_pages = ceil($total_pos / $items_per_page);
+if (!empty($params)) $count_stmt->bind_param($types, ...$params);
+$count_stmt->execute();
+$total_pos = $count_stmt->get_result()->fetch_row()[0];
+$count_stmt->close();
+$total_pages = ceil($total_pos / $items_per_page);
 
-// Main query (with latest GRN id)
+// Main query
 $main_sql = "SELECT h.*, s.supplier_name, 
                 (SELECT gh.grn_id FROM grn_header gh WHERE gh.po_id = h.po_id ORDER BY gh.grn_id DESC LIMIT 1) as latest_grn_id
              FROM po_header h 
-             LEFT JOIN return_qc.suppliers s ON h.supplier_id = s.supplier_id 
-             WHERE $where_str 
+             LEFT JOIN suppliers s ON h.supplier_id = s.supplier_id 
+             $where_str 
              ORDER BY h.purchase_date DESC, h.po_id DESC 
              LIMIT ? OFFSET ?";
 $types .= "ii";
-$params[] =$items_per_page;
-$params[] =$offset;
+$params[] = $items_per_page;
+$params[] = $offset;
 
-$query_stmt =$conn->prepare($main_sql);$query_stmt->bind_param($types, ...$params);
-$query_stmt->execute();$pos_list = $query_stmt->get_result()->fetch_all(MYSQLI_ASSOC);$query_stmt->close();
+$query_stmt = $conn->prepare($main_sql);
+$query_stmt->bind_param($types, ...$params);
+$query_stmt->execute();
+$pos_list = $query_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$query_stmt->close();
 
-// ========== INCLUDE VIEWS ==========
 include ROOT_PATH . 'includes/header.php';
 include ROOT_PATH . 'includes/sidebar.php';
 ?>
 
 <style>
-    /* ====== DASHBOARD STYLES ====== */
     body { background-color: #fcfcfc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }
     .asb-header-title { color: #b71c1c; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-left: 5px solid #d32f2f; padding-left: 15px; margin-bottom: 25px; }
     .asb-card { background: #ffffff; border: 1px solid #eaeaea; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); overflow: hidden; margin-bottom: 30px; }
@@ -134,29 +185,27 @@ include ROOT_PATH . 'includes/sidebar.php';
     .asb-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
     .asb-badge-pending { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
     .asb-badge-received { background: #e8f5e9; color: #1b5e20; border: 1px solid #c8e6c9; }
+    .asb-badge-completed { background: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; }
+    .asb-badge-cancelled { background: #ffebee; color: #b71c1c; border: 1px solid #ffcdd2; }
     .asb-input { border: 1px solid #dcdcdc; padding: 10px 14px; border-radius: 6px; width: 100%; transition: all 0.2s; }
     .asb-input:focus { border-color: #d32f2f; box-shadow: 0 0 0 3px rgba(211,47,47,0.1); outline: none; }
     .asb-footer { text-align: center; margin-top: 50px; padding: 20px; color: #777; border-top: 1px solid #eee; font-size: 13px; }
     .asb-footer strong { color: #d32f2f; }
-    .grn-history-table { font-size: 13px; }
-    .grn-history-table th { background: #f1f1f1; }
-    .grn-history-table .btn-sm { padding: 3px 8px; font-size: 11px; }
     .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(3px); }
     .modal-overlay.active { display:flex; }
-    .modal-box { background:white; padding:30px; border-radius:14px; max-width:900px; width:95%; max-height:92vh; overflow-y:auto; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+    .modal-box { background:white; padding:30px; border-radius:14px; max-width:950px; width:95%; max-height:92vh; overflow-y:auto; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
     .modal-box.grn { border-top: 6px solid #d32f2f; }
     .modal-box.history { border-top: 6px solid #1976d2; }
 </style>
 
 <div class="container-fluid" style="padding: 20px 30px;">
-    
     <div class="page-header">
-        <h2 class="asb-header-title">ASb Fashion <span style="font-weight:300; color:#555; font-size:18px;">| Goods Receiving Control</span></h2>
+        <h2 class="asb-header-title">ASB Fashion <span style="font-weight:300; color:#555; font-size:18px;">| Goods Receiving Control</span></h2>
     </div>
 
     <!-- ===== ALERTS ===== -->
     <?php if (isset($_SESSION['success'])): ?>
-        <div class="alert alert-success" style="padding:20px; background-color: #e8f5e9; border: 1px solid #c8e6c9; color: #1b5e20; border-radius:10px; margin-bottom:25px; position:relative;">
+        <div class="alert alert-success" style="padding:20px; background-color: #e8f5e9; border: 1px solid #c8e6c9; color: #1b5e20; border-radius:10px; margin-bottom:25px;">
             <?= $_SESSION['success']; unset($_SESSION['success']); ?>
         </div>
     <?php endif; ?>
@@ -166,15 +215,25 @@ include ROOT_PATH . 'includes/sidebar.php';
         </div>
     <?php endif; ?>
 
-    <!-- ===== FILTER BAR ===== -->
+    <!-- ===== FILTER BAR WITH STATUS ===== -->
     <div class="asb-card" style="margin-bottom: 25px;">
         <div style="padding: 20px; background: #fff;">
             <form method="GET" style="display:flex; flex-wrap:wrap; gap:15px; align-items:flex-end;">
                 <div style="flex:2; min-width:250px;">
                     <label style="font-weight:600; margin-bottom:8px; display:block; font-size:13px; color:#555;">Search Parameters</label>
-                    <input type="text" name="search" class="asb-input" placeholder="Search PO Number or Supplier Name..." value="<?= htmlspecialchars($search_filter); ?>">
+                    <input type="text" name="search" class="asb-input" placeholder="Search PO Number, Supplier, or Attention..." value="<?= htmlspecialchars($search_filter); ?>">
                 </div>
-                <div style="flex:1; min-width:180px;">
+                <div style="flex:1; min-width:160px;">
+                    <label style="font-weight:600; margin-bottom:8px; display:block; font-size:13px; color:#555;">Status Filter</label>
+                    <select name="status_filter" class="asb-input" style="padding: 10px 12px;">
+                        <option value="Pending" <?= $status_filter == 'Pending' ? 'selected' : ''; ?>>Pending</option>
+                        <option value="Received" <?= $status_filter == 'Received' ? 'selected' : ''; ?>>Received</option>
+                        <option value="Completed" <?= $status_filter == 'Completed' ? 'selected' : ''; ?>>Completed</option>
+                        <option value="Cancelled" <?= $status_filter == 'Cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                        <option value="All" <?= $status_filter == 'All' ? 'selected' : ''; ?>>All Statuses</option>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:160px;">
                     <label style="font-weight:600; margin-bottom:8px; display:block; font-size:13px; color:#555;">Purchase Date</label>
                     <input type="date" name="date_filter" class="asb-input" value="<?= htmlspecialchars($date_filter); ?>">
                 </div>
@@ -188,10 +247,10 @@ include ROOT_PATH . 'includes/sidebar.php';
 
     <!-- ===== PO LIST ===== -->
     <div class="asb-card">
-        <div class="asb-card-header">📋 Active Production Purchase Orders Pending Delivery</div>
+        <div class="asb-card-header">📋 Production Purchase Orders Matrix (Showing <?= count($pos_list); ?> of <?= number_format($total_pos); ?> Records)</div>
         <div class="card-body" style="padding: 0;">
             <?php if (empty($pos_list)): ?>
-                <div style="text-align:center; padding:50px; color:#999; font-size:14px;">No active purchase orders found requiring stock receiving.</div>
+                <div style="text-align:center; padding:50px; color:#999; font-size:14px;">No purchase orders found matching your criteria.</div>
             <?php else: ?>
                 <div class="table-responsive">
                     <table class="table asb-table" style="width:100%; margin-bottom:0; border-collapse:collapse;">
@@ -199,32 +258,37 @@ include ROOT_PATH . 'includes/sidebar.php';
                             <tr>
                                 <th>PO Number</th>
                                 <th>Supplier</th>
+                                <th>Attention</th>
                                 <th>Purchase Date</th>
                                 <th>Status</th>
                                 <th style="text-align:right; padding-right:24px !important;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($pos_list as$po): 
-                                $badgeClass = (strtolower($po['status']) == 'received') ? 'asb-badge-received' : 'asb-badge-pending';
+                            <?php foreach ($pos_list as $po):$stLower = strtolower($po['status']);$badgeClass = 'asb-badge-pending';
+                                if ($stLower == 'received')$badgeClass = 'asb-badge-received';
+                                elseif ($stLower == 'completed')$badgeClass = 'asb-badge-completed';
+                                elseif ($stLower == 'cancelled')$badgeClass = 'asb-badge-cancelled';
+
                                 $hasGrn = !empty($po['latest_grn_id']);
                             ?>
                                 <tr>
                                     <td><strong style="color:#222; font-size:14px;"><?= $po['po_number']; ?></strong></td>
                                     <td style="color:#555;"><?= htmlspecialchars($po['supplier_name'] ?? 'Unknown Vendor'); ?></td>
+                                    <td style="color:#444; font-style:italic;"><?= htmlspecialchars($po['attention'] ?? '—'); ?></td>
                                     <td style="color:#666; font-size:13px;"><?= date('M d, Y', strtotime($po['purchase_date'])); ?></td>
                                     <td><span class="asb-badge <?= $badgeClass; ?>"><?= $po['status']; ?></span></td>
                                     <td style="text-align:right; padding-right:24px !important;">
                                         <div style="display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
                                             <?php if ($hasGrn): ?>
-                                                <a href="print_grn.php?grn_id=<?= $po['latest_grn_id']; ?>&type=supplier" target="_blank" class="btn-asb-action" style="background: #fff; color: #d32f2f; border: 1px solid #d32f2f; padding: 6px 12px; font-size: 12px; box-shadow: none;" title="Print Supplier Copy">🖨️ Supplier</a>
+                                                <a href="print_grn.php?grn_id=<?= $po['latest_grn_id']; ?>&type=supplier" target="_blank" class="btn-asb-action" style="background: #fff; color: #d32f2f; border: 1px solid #d32f2f; padding: 6px 12px; font-size: 12px; box-shadow: none;" title="Print Supplier Copy">🖨 Supplier</a>
                                                 <a href="print_grn.php?grn_id=<?= $po['latest_grn_id']; ?>&type=internal" target="_blank" class="btn-asb-action" style="background: #fff; color: #333; border: 1px solid #ccc; padding: 6px 12px; font-size: 12px; box-shadow: none;" title="Print Gate Pass">📋 Gate Pass</a>
                                             <?php else: ?>
                                                 <button class="btn-asb-action" style="background: #f5f5f5; color: #aaa; border: 1px solid #ddd; padding: 6px 12px; font-size: 12px; box-shadow: none; cursor: not-allowed;" disabled>🚫 No Items</button>
                                             <?php endif; ?>
                                             
                                             <button class="btn-asb-action" style="background: #1976d2; padding: 6px 12px; font-size: 12px;" onclick="viewGrnHistory(<?= $po['po_id']; ?>, '<?= addslashes($po['po_number']); ?>')">📜 GRN History</button>
-                                            <button class="btn-asb-action" style="padding: 7px 14px; font-size: 13px;" onclick="openGrnModal(<?= $po['po_id']; ?>, '<?= $po['po_number']; ?>', '<?= htmlspecialchars($po['supplier_name'] ?? 'Unknown'); ?>')">📥 Receive Delivery</button>
+                                            <button class="btn-asb-action" style="padding: 7px 14px; font-size: 13px;" onclick="openGrnModal(<?= $po['po_id']; ?>, '<?=$po['po_number']; ?>', '<?= htmlspecialchars($po['supplier_name'] ?? 'Unknown'); ?>', '<?= htmlspecialchars($po['attention'] ?? '—'); ?>')">📥 Receive Delivery</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -234,12 +298,14 @@ include ROOT_PATH . 'includes/sidebar.php';
                 </div>
                 <!-- Pagination -->
                 <?php if ($total_pages > 1): ?>
-                    <div style="padding:15px 24px; background:#f9f9f9; border-top:1px solid #eee;">
-                        <ul class="pagination" style="margin:0; display:flex; gap:5px; list-style:none; padding:0; justify-content:center;">
-                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                                <li><a href="?page_num=<?= $i ?>&search=<?= urlencode($search_filter) ?>&date_filter=<?= urlencode($date_filter) ?>" class="btn-asb-action" style="background:<?= $i==$current_page?'#b71c1c':'#eee'; ?>; color:<?= $i==$current_page?'#fff':'#333'; ?>; padding:6px 12px; font-size:13px;"><?= $i ?></a></li>
-                            <?php endfor; ?>
-                        </ul>
+                    <div style="padding:15px 24px; background:#f9f9f9; border-top:1px solid #eee; display:flex; justify-content:center; align-items:center; gap:5px; flex-wrap:wrap;">
+                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                            <?php if ($i == 1 || $i ==$total_pages || abs($i -$current_page) <= 2): ?>
+                                <a href="?page_num=<?= $i ?>&search=<?= urlencode($search_filter) ?>&status_filter=<?= urlencode($status_filter) ?>&date_filter=<?= urlencode($date_filter) ?>" class="btn-asb-action" style="background:<?= $i==$current_page?'#b71c1c':'#eee'; ?>; color:<?= $i==$current_page?'#fff':'#333'; ?>; padding:6px 12px; font-size:13px; box-shadow:none;"><?= $i ?></a>
+                            <?php elseif (abs($i -$current_page) == 3): ?>
+                                <span style="padding:0 5px; color:#888;">...</span>
+                            <?php endif; ?>
+                        <?php endfor; ?>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -247,22 +313,36 @@ include ROOT_PATH . 'includes/sidebar.php';
     </div>
 
     <div class="asb-footer">
-        © <?= date('Y'); ?> <strong>ASb Fashion</strong> Inventory Ledger Matrix System. All Rights Reserved.<br>
+        © <?= date('Y'); ?> <strong>ASB Fashion</strong> Inventory Ledger Matrix System. All Rights Reserved.<br>
         <span style="font-size:11px; margin-top:5px; display:inline-block; color:#aaa;">System Designed & Developed by <strong>Vexel IT by Kavizz</strong></span>
     </div>
 </div>
 
-<!-- ===== MODAL: RECEIVING ===== -->
+<!-- ===== MODAL: RECEIVING & FLOOR SELECTION ===== -->
 <div id="grnModal" class="modal-overlay">
     <div class="modal-box grn">
         <h4 style="color:#b71c1c; font-weight:bold; margin-top:0; margin-bottom:20px; font-size:20px; display:flex; align-items:center; gap:8px;">📥 Log New Shipment Intake Batch</h4>
         <form method="POST" action="">
             <input type="hidden" name="process_grn" value="1">
             <input type="hidden" name="po_id" id="modal_po_id">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:25px; background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #eee;">
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; margin-bottom:20px; background:#f9f9f9; padding:15px; border-radius:8px; border:1px solid #eee;">
                 <div><span style="color:#777; font-size:12px; display:block;">PO Reference</span> <strong id="modal_po_span" style="font-size:15px; color:#111;"></strong></div>
                 <div><span style="color:#777; font-size:12px; display:block;">Supplier</span> <strong id="modal_supplier_span" style="font-size:15px; color:#111;"></strong></div>
+                <div><span style="color:#777; font-size:12px; display:block;">Attention</span> <strong id="modal_attention_span" style="font-size:15px; color:#111;"></strong></div>
             </div>
+
+            <!-- HEADER LEVEL FLOOR / SECTION SELECTION -->
+            <div style="margin-bottom: 20px; background: #fff8f8; padding: 15px; border-radius: 8px; border: 1px dashed #d32f2f;">
+                <label style="font-weight:700; margin-bottom:6px; display:block; font-size:13px; color:#b71c1c;">Target Floor / Department Section *</label>
+                <select name="floor_id" class="asb-input" required style="font-weight:600; color:#333;">
+                    <option value="">-- Select Destination Floor (Ladies, Gents, Baby, Cosmetic, Return, etc.) --</option>
+                    <?php foreach ($floors_list as$floor): ?>
+                        <option value="<?= $floor['floor_id']; ?>"><?= htmlspecialchars($floor['floor_name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; margin-bottom:20px;">
                 <div>
                     <label style="font-weight:600; margin-bottom:6px; display:block; font-size:12px; color:#444;">Delivery Note / Invoice No *</label>
@@ -277,6 +357,7 @@ include ROOT_PATH . 'includes/sidebar.php';
                     <input type="text" name="vehicle_no" class="asb-input" required placeholder="Ex: WP-CB-1234">
                 </div>
             </div>
+            
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:25px;">
                 <div>
                     <label style="font-weight:600; margin-bottom:6px; display:block; font-size:12px; color:#444;">Delivered By (Driver Name) *</label>
@@ -312,7 +393,6 @@ include ROOT_PATH . 'includes/sidebar.php';
                 </table>
             </div>
 
-            <!-- PO Summary Bar at bottom of modal table -->
             <div id="po_items_summary" style="margin-top: 10px; padding: 10px 15px; background: #f8f9fa; border-radius: 6px; font-size: 13px; color: #555; display: flex; justify-content: space-between; font-weight: 600;">
                 <span>Total Line Items: <span id="summary_total_items" style="color:#b71c1c;">0</span></span>
                 <span>Fully Completed: <span id="summary_completed_items" style="color:#2e7d32;">0</span></span>
@@ -342,10 +422,11 @@ include ROOT_PATH . 'includes/sidebar.php';
 let globalPoItems = [];
 
 // ===== RECEIVING MODAL =====
-function openGrnModal(poId, poNumber, supplierName) {
+function openGrnModal(poId, poNumber, supplierName, attention) {
     document.getElementById('modal_po_id').value = poId;
     document.getElementById('modal_po_span').innerText = poNumber;
     document.getElementById('modal_supplier_span').innerText = supplierName;
+    document.getElementById('modal_attention_span').innerText = attention;
     document.getElementById('modal_item_search').value = '';
     
     const tbody = document.getElementById('grn_items_tbody');

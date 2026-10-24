@@ -10,9 +10,7 @@ if (!$po_id) {
     die('Invalid PO ID.');
 }
 
-// ------------------------------------------------------------
-// Fetch PO data (same logic as AJAX endpoint)
-// ------------------------------------------------------------
+// Fetch PO data
 $sql = "SELECT h.*, s.supplier_name FROM po_header h
         LEFT JOIN return_qc.suppliers s ON h.supplier_id = s.supplier_id
         WHERE h.po_id = ?";
@@ -111,7 +109,6 @@ foreach ($items_data as $item) {
         }
     }
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -120,7 +117,13 @@ foreach ($items_data as $item) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PO Allocation Report – <?php echo htmlspecialchars($header['po_number']); ?></title>
     <style>
-        /* Print-optimized styles */
+        :root {
+            --primary: #c0392b;       
+            --primary-dark: #a93226;  
+            --light-bg: #fdf2f0;      
+            --border-color: #d98880;  
+            --text-main: #2c3e50;     
+        }
         * {
             margin: 0;
             padding: 0;
@@ -128,11 +131,11 @@ foreach ($items_data as $item) {
         }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 9pt;
-            line-height: 1.4;
-            color: #1e2a3a;
+            font-size: 8.5pt;
+            line-height: 1.3;
+            color: var(--text-main);
             background: #fff;
-            padding: 10px;
+            padding: 8px;
         }
         .container {
             max-width: 100%;
@@ -140,148 +143,192 @@ foreach ($items_data as $item) {
         .report-header {
             display: flex;
             justify-content: space-between;
-            border-bottom: 3px solid #c0392b;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
+            align-items: flex-end;
+            border-bottom: 2.5px solid var(--primary);
+            padding-bottom: 6px;
+            margin-bottom: 8px;
         }
         .report-header .brand h1 {
-            font-size: 18pt;
-            color: #c0392b;
-            margin: 0;
+            font-size: 15pt;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         .report-header .brand small {
-            font-size: 10pt;
+            font-size: 8pt;
             color: #7f8c8d;
         }
         .report-header .info {
             text-align: right;
-            font-size: 9pt;
+            font-size: 8pt;
         }
         .report-header .info strong {
-            color: #c0392b;
+            color: var(--primary);
         }
         .po-details {
             display: flex;
             justify-content: space-between;
-            background: #fdf2f0;
-            padding: 6px 12px;
-            border-left: 4px solid #c0392b;
-            margin-bottom: 12px;
-            font-size: 9pt;
+            background: var(--light-bg);
+            padding: 6px 10px;
+            border-radius: 4px;
+            border-left: 4px solid var(--primary);
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            margin-bottom: 10px;
+            font-size: 8pt;
         }
         .po-details div {
-            width: 33%;
+            flex: 1;
         }
-        .po-details strong {
-            color: #c0392b;
+        
+        /* Table Styles */
+        .table-wrapper {
+            overflow-x: auto;
         }
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 7.5pt;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
         }
-        th {
-            background: #c0392b;
-            color: #fff;
+        th, td {
             padding: 4px 3px;
-            text-align: center;
-            font-weight: 600;
-            border: 1px solid #ddd;
-        }
-        td {
-            padding: 3px 3px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             text-align: center;
             vertical-align: middle;
         }
+        th {
+            background: var(--primary);
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        /* Vertical Branch Headers */
+        .vertical-header-container {
+            height: 95px;
+            width: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        .vertical-header {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            font-size: 7pt;
+            font-weight: 500;
+            color: var(--text-main);
+            letter-spacing: 0.2px;
+        }
+        
+        .company-group-th {
+            background: #fadbd8;
+            color: #78281f;
+            font-size: 8pt;
+            border-bottom: 2px solid var(--primary);
+        }
+        .company-total-th {
+            background: #f5b7b1;
+            color: #641e16;
+            font-size: 7.5pt;
+        }
+        
         .text-left { text-align: left; }
         .item-name { font-weight: 500; }
         .totals-row {
-            background: #fde8e4;
+            background: #fadbd8;
             font-weight: bold;
+            color: #641e16;
         }
-        .company-total-header {
-            background: #d5dbe3;
-        }
+        
+        /* Summary Footer Card */
         .summary-footer {
             display: flex;
             flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 15px;
-            background: #fdf2f0;
-            padding: 8px 14px;
-            border-left: 4px solid #c0392b;
-            margin-top: 12px;
-            font-size: 9pt;
+            justify-content: space-around;
+            background: var(--light-bg);
+            padding: 6px 10px;
+            border-left: 4px solid var(--primary);
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 8pt;
+        }
+        .summary-footer div {
+            margin: 2px 8px;
         }
         .summary-footer strong {
-            color: #c0392b;
+            color: var(--primary);
         }
+        
         .footer-text {
-            margin-top: 12px;
-            border-top: 2px solid #c0392b;
-            padding-top: 6px;
+            margin-top: 10px;
+            border-top: 1.5px solid var(--primary);
+            padding-top: 5px;
             display: flex;
             justify-content: space-between;
             font-size: 7pt;
-            color: #666;
-        }
-        .footer-text .right span {
-            font-weight: 600;
-            color: #c0392b;
+            color: #7f8c8d;
         }
 
-        /* Page settings for print */
+        /* Print Settings (Optimized for both Color & B&W Printers) */
         @page {
             size: A4 landscape;
-            margin: 8mm 10mm;
+            margin: 5mm;
         }
         @media print {
-            body { padding: 0; }
+            body { padding: 0; margin: 0; }
             .no-print { display: none; }
-            th { background: #c0392b !important; color: #fff !important; }
-            .totals-row { background: #fde8e4 !important; }
-            .company-total-header { background: #d5dbe3 !important; }
-            .po-details { background: #fdf2f0 !important; }
-            .summary-footer { background: #fdf2f0 !important; }
+            
+            /* High contrast adjustments for Black & White laser printing */
+            table, th, td { border-color: #333 !important; }
+            th { background: #2c3e50 !important; color: #fff !important; }
+            .company-group-th { background: #e2e8f0 !important; color: #000 !important; }
+            .company-total-th { background: #cbd5e0 !important; color: #000 !important; }
+            .totals-row { background: #cbd5e0 !important; color: #000 !important; }
+            .po-details, .summary-footer { background: #f8f9fa !important; border-color: #333 !important; }
+            
             th, td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
-        /* Auto-print button (visible on screen) */
+        
         .auto-print-btn {
-            text-align: center;
-            margin: 15px 0;
+            text-align: right;
+            margin-bottom: 10px;
         }
         .auto-print-btn button {
-            padding: 8px 24px;
-            background: #c0392b;
+            padding: 5px 14px;
+            background: var(--primary);
             color: #fff;
             border: none;
             border-radius: 4px;
             font-weight: bold;
             cursor: pointer;
+            margin-left: 4px;
+            font-size: 8pt;
         }
         .auto-print-btn button:hover {
-            background: #a93226;
+            background: var(--primary-dark);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Auto-print button (visible on screen, hidden in print) -->
+        <!-- Action Buttons -->
         <div class="auto-print-btn no-print">
-            <button onclick="window.print()"><i class="fas fa-print"></i> Print / PDF</button>
-            <button onclick="window.close()">Close</button>
+            <button onclick="window.print()">Print / PDF</button>
+            <button onclick="window.close()" style="background:#2c3e50;">Close</button>
         </div>
 
-        <!-- Report content -->
+        <!-- Report Header -->
         <div class="report-header">
             <div class="brand">
                 <h1>ASB Group Of Companies</h1>
                 <small>Purchase Order Allocation Report</small>
             </div>
             <div class="info">
-                <strong>PO:</strong> <?php echo htmlspecialchars($header['po_number']); ?><br>
+                <strong>PO Number:</strong> <?php echo htmlspecialchars($header['po_number']); ?><br>
                 <strong>Supplier:</strong> <?php echo htmlspecialchars($header['supplier_name']); ?><br>
                 <strong>Date:</strong> <?php echo htmlspecialchars($header['purchase_date']); ?>
             </div>
@@ -293,92 +340,115 @@ foreach ($items_data as $item) {
             <div style="text-align:right;"><strong>Remarks:</strong> <?php echo htmlspecialchars($header['remarks'] ?? '-'); ?></div>
         </div>
 
-        <!-- Table -->
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th style="text-align:left;">Item</th>
-                    <th>PO Qty</th>
-                    <?php foreach ($companyIds as $cid): ?>
-                        <?php $comp = $companyMap[$cid]; ?>
-                        <th colspan="<?php echo count($comp['branches']); ?>" style="background:#e9ecef;"><?php echo htmlspecialchars($comp['company_name']); ?> Branches</th>
-                    <?php endforeach; ?>
-                    <?php foreach ($companyIds as $cid): ?>
-                        <th style="background:#d5dbe3;"><?php echo htmlspecialchars($companyMap[$cid]['company_name']); ?> Total</th>
-                    <?php endforeach; ?>
-                    <th>Total Alloc</th>
-                    <th>Remaining</th>
-                </tr>
-                <tr>
-                    <th></th>
-                    <th></th>
-                    <th></th>
-                    <?php foreach ($companyIds as $cid): ?>
-                        <?php $comp = $companyMap[$cid]; ?>
-                        <?php foreach ($comp['branches'] as $b): ?>
-                            <th style="font-weight:normal; font-size:7pt;"><?php echo htmlspecialchars($b['location_name']); ?></th>
-                        <?php endforeach; ?>
-                    <?php endforeach; ?>
-                    <?php foreach ($companyIds as $cid): ?>
-                        <th style="font-weight:normal; font-size:7pt;">Total</th>
-                    <?php endforeach; ?>
-                    <th></th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($items_data as $idx => $item): ?>
+        <!-- Table Grid -->
+        <div class="table-wrapper">
+            <table>
+                <thead>
                     <tr>
-                        <td><?php echo $idx+1; ?></td>
-                        <td class="text-left item-name"><strong><?php echo htmlspecialchars($item['item_code']); ?></strong><br><small><?php echo htmlspecialchars($item['item_name']); ?></small></td>
-                        <td><?php echo $item['po_qty']; ?></td>
+                        <th rowspan="2" style="width: 30px;">#</th>
+                        <th rowspan="2" style="text-align:left; min-width: 160px;">Item Description</th>
+                        <th rowspan="2" style="width: 45px;">PO Qty</th>
+                        
+                        <!-- Company Group Header -->
+                        <?php foreach ($companyIds as $cid): ?>
+                            <?php $comp = $companyMap[$cid]; ?>
+                            <th colspan="<?php echo count($comp['branches']); ?>" class="company-group-th">
+                                <?php echo htmlspecialchars($comp['company_name']); ?>
+                            </th>
+                        <?php endforeach; ?>
+                        
+                        <!-- Company Totals Header -->
+                        <?php foreach ($companyIds as $cid): ?>
+                            <th rowspan="2" class="company-total-th">
+                                <div class="vertical-header-container" style="height:auto; width:auto;">
+                                    <span style="font-size:7pt; font-weight:bold;"><?php echo htmlspecialchars($companyMap[$cid]['company_name']); ?> Total</span>
+                                </div>
+                            </th>
+                        <?php endforeach; ?>
+                        
+                        <th rowspan="2" style="width: 50px;">Total Alloc</th>
+                        <th rowspan="2" style="width: 50px;">Remaining</th>
+                    </tr>
+                    <tr>
+                        <!-- Vertical Branch Sub-headers -->
                         <?php foreach ($companyIds as $cid): ?>
                             <?php $comp = $companyMap[$cid]; ?>
                             <?php foreach ($comp['branches'] as $b): ?>
-                                <td><?php echo $item['branches'][$b['location_id']] ?? 0; ?></td>
+                                <th style="background: #ffffff; padding: 2px;">
+                                    <div class="vertical-header-container">
+                                        <span class="vertical-header"><?php echo htmlspecialchars($b['location_name']); ?></span>
+                                    </div>
+                                </th>
                             <?php endforeach; ?>
                         <?php endforeach; ?>
-                        <?php foreach ($companyIds as $cid): ?>
-                            <?php
-                                $total = 0;
-                                $comp = $companyMap[$cid];
-                                foreach ($comp['branches'] as $b) {
-                                    $total += $item['branches'][$b['location_id']] ?? 0;
-                                }
-                            ?>
-                            <td style="background:#f5f7fa; font-weight:bold;"><?php echo $total; ?></td>
-                        <?php endforeach; ?>
-                        <td style="font-weight:bold;"><?php echo $item['total_allocated']; ?></td>
-                        <td style="<?php echo $item['remaining'] > 0 ? 'color:#e67e22;' : 'color:green;'; ?>"><?php echo $item['remaining']; ?></td>
                     </tr>
-                <?php endforeach; ?>
-                <!-- Totals row -->
-                <tr class="totals-row">
-                    <td colspan="3" style="text-align:right;">TOTALS</td>
-                    <?php foreach ($companyIds as $cid): ?>
-                        <?php $comp = $companyMap[$cid]; ?>
-                        <?php foreach ($comp['branches'] as $b): ?>
-                            <td><?php echo $branchTotals[$b['location_id']]; ?></td>
+                </thead>
+                <tbody>
+                    <?php foreach ($items_data as $idx => $item): ?>
+                        <tr>
+                            <td><?php echo $idx + 1; ?></td>
+                            <td class="text-left item-name">
+                                <strong><?php echo htmlspecialchars($item['item_code']); ?></strong><br>
+                                <small style="color: #7f8c8d;"><?php echo htmlspecialchars($item['item_name']); ?></small>
+                            </td>
+                            <td><?php echo $item['po_qty']; ?></td>
+                            
+                            <!-- Branch Allocations -->
+                            <?php foreach ($companyIds as $cid): ?>
+                                <?php $comp = $companyMap[$cid]; ?>
+                                <?php foreach ($comp['branches'] as $b): ?>
+                                    <td><?php echo $item['branches'][$b['location_id']] ?? 0; ?></td>
+                                <?php endforeach; ?>
+                            <?php endforeach; ?>
+                            
+                            <!-- Company Subtotals -->
+                            <?php foreach ($companyIds as $cid): ?>
+                                <?php
+                                    $total = 0;
+                                    $comp = $companyMap[$cid];
+                                    foreach ($comp['branches'] as $b) {
+                                        $total += $item['branches'][$b['location_id']] ?? 0;
+                                    }
+                                ?>
+                                <td style="background:#fef9e7; font-weight:bold;"><?php echo $total; ?></td>
+                            <?php endforeach; ?>
+                            
+                            <td style="font-weight:bold;"><?php echo $item['total_allocated']; ?></td>
+                            <td style="<?php echo $item['remaining'] > 0 ? 'color:#d35400; font-weight:bold;' : 'color:#27ae60; font-weight:bold;'; ?>">
+                                <?php echo $item['remaining']; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    
+                    <!-- Grand Totals Row -->
+                    <tr class="totals-row">
+                        <td colspan="3" style="text-align:right;">GRAND TOTALS</td>
+                        <?php foreach ($companyIds as $cid): ?>
+                            <?php $comp = $companyMap[$cid]; ?>
+                            <?php foreach ($comp['branches'] as $b): ?>
+                                <td><?php echo $branchTotals[$b['location_id']]; ?></td>
+                            <?php endforeach; ?>
                         <?php endforeach; ?>
-                    <?php endforeach; ?>
-                    <?php foreach ($companyIds as $cid): ?>
-                        <td style="background:#f5f7fa;"><?php echo $companyTotals[$cid]; ?></td>
-                    <?php endforeach; ?>
-                    <td><?php echo $grandTotalAlloc; ?></td>
-                    <td><?php echo $grandRemaining; ?></td>
-                </tr>
-            </tbody>
-        </table>
+                        
+                        <?php foreach ($companyIds as $cid): ?>
+                            <td style="background:#f5b7b1;"><?php echo $companyTotals[$cid]; ?></td>
+                        <?php endforeach; ?>
+                        
+                        <td><?php echo $grandTotalAlloc; ?></td>
+                        <td><?php echo $grandRemaining; ?></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
-        <!-- Summary footer -->
+        <!-- Summary Footer Card -->
         <div class="summary-footer">
             <?php foreach ($companyIds as $cid): ?>
-                <div><strong><?php echo htmlspecialchars($companyMap[$cid]['company_name']); ?> Total:</strong> <?php echo $companyTotals[$cid]; ?></div>
+                <div><strong><?php echo htmlspecialchars($companyMap[$cid]['company_name']); ?>:</strong> <?php echo $companyTotals[$cid]; ?></div>
             <?php endforeach; ?>
-            <div><strong>Total PO Qty:</strong> <?php echo $grandTotalPO; ?></div>
-            <div><strong>Total Allocated:</strong> <?php echo $grandTotalAlloc; ?></div>
-            <div><strong>Total Remaining:</strong> <?php echo $grandRemaining; ?></div>
+            <div><strong>PO Qty:</strong> <?php echo $grandTotalPO; ?></div>
+            <div><strong>Allocated:</strong> <?php echo $grandTotalAlloc; ?></div>
+            <div><strong>Remaining:</strong> <?php echo $grandRemaining; ?></div>
         </div>
 
         <div class="footer-text">
@@ -386,10 +456,5 @@ foreach ($items_data as $item) {
             <div class="right">Generated on <span><?php echo date('Y-m-d H:i'); ?></span></div>
         </div>
     </div>
-
-    <!-- Auto-print on load (uncomment if you want the print dialog to appear automatically) -->
-    <!-- <script>
-        setTimeout(function() { window.print(); }, 500);
-    </script> -->
 </body>
 </html>

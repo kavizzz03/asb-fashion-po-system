@@ -659,7 +659,6 @@ $(document).ready(function() {
                 }
                 renderAllocationGrid(data);
                 $('#modalTitle').html('<i class="fas fa-tasks"></i> PO: ' + data.header.po_number + ' | Supplier: ' + data.header.supplier_name);
-                // Store po_id for save
                 $('#allocationModal').data('po_id', poId);
             },
             error: function() {
@@ -668,7 +667,7 @@ $(document).ready(function() {
         });
     }
 
-    // ---- Render Allocation Grid ----
+    // ---- Enhanced Render Allocation Grid with Search, Branch Filter & Sequence Ordering ----
     function renderAllocationGrid(data) {
         var items = data.items;
         var branches = data.branches;
@@ -679,43 +678,70 @@ $(document).ready(function() {
             return;
         }
 
-        // Group branches by company
         var companyMap = {};
+        var branchListHTML = '<option value="">-- All Branches --</option>';
+        
         branches.forEach(function(b) {
             var cid = b.company_id || 0;
             if (!companyMap[cid]) companyMap[cid] = { company_name: b.company_name || 'Unassigned', branches: [] };
             companyMap[cid].branches.push(b);
+            branchListHTML += '<option value="' + b.location_id + '">' + b.location_name + ' (' + (b.company_name || 'Branch') + ')</option>';
         });
 
-        var html = '<div class="table-responsive"><table class="allocation-table" id="allocationGrid">';
-        // Header row: item columns + branch columns grouped by company
-        html += '<thead><tr><th style="min-width:120px;">Item</th><th style="min-width:60px;">PO Qty</th><th style="min-width:60px;">Allocated</th><th style="min-width:60px;">Available</th>';
+        var html = `
+            <div class="no-print" style="display: flex; gap: 10px; margin-bottom: 15px; background: #f8f9fa; padding: 10px; border-radius: 6px; align-items: center;">
+                <div style="flex: 1;">
+                    <input type="text" id="modalItemSearch" class="asb-input" placeholder="🔍 Search item code, name, or system code..." style="background: #fff;">
+                </div>
+                <div style="width: 220px;">
+                    <select id="modalBranchFilter" class="asb-input" style="background: #fff;">
+                        ${branchListHTML}
+                    </select>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="allocation-table" id="allocationGrid">
+        `;
+
+        html += '<thead><tr>';
+        html += '<th style="min-width:140px; text-align:left; padding-left:8px;">Item Details (Seq / Code)</th>';
+        html += '<th style="min-width:50px;">PO Qty</th>';
+        html += '<th style="min-width:50px;">Alloc</th>';
+        html += '<th style="min-width:50px;">Avail</th>';
 
         var companyIds = Object.keys(companyMap);
         companyIds.forEach(function(cid) {
             var comp = companyMap[cid];
             var colSpan = comp.branches.length;
-            html += '<th colspan="' + colSpan + '" style="text-align:center; background:#e9ecef;">' + comp.company_name + '</th>';
+            html += '<th colspan="' + colSpan + '" style="text-align:center; background:#e9ecef; border-left: 2px solid #ccc;">' + comp.company_name + '</th>';
         });
         html += '</tr><tr><th></th><th></th><th></th><th></th>';
 
         companyIds.forEach(function(cid) {
             var comp = companyMap[cid];
             comp.branches.forEach(function(b) {
-                html += '<th style="text-align:center; font-weight:normal; font-size:10px;">' + b.location_name + '</th>';
+                html += '<th class="branch-col-header" data-locid="' + b.location_id + '" style="text-align:center; font-weight:600; font-size:10px; vertical-align: bottom; padding: 6px 2px;">';
+                html += '<div style="white-space: nowrap;">' + b.location_name + '</div>';
+                html += '</th>';
             });
         });
         html += '</tr></thead><tbody>';
 
-        // For each item
-        items.forEach(function(item) {
+        items.forEach(function(item, index) {
             var poItemId = item.po_item_id;
             var qty = parseInt(item.quantity) || 0;
             var allocated = parseInt(item.allocated_qty) || 0;
             var available = qty - allocated;
+            var searchText = (item.item_code + ' ' + item.item_name + ' ' + (item.system_code || '')).toLowerCase();
 
-            html += '<tr data-poitem="' + poItemId + '">';
-            html += '<td class="item-label"><strong>' + item.item_code + '</strong><br><small>' + item.item_name + '</small></td>';
+            html += '<tr data-poitem="' + poItemId + '" data-searchtext="' + searchText + '">';
+            
+            html += '<td class="item-label" style="text-align:left; padding-left:8px;">';
+            html += '<span style="background:#f1f3f5; padding:2px 6px; border-radius:4px; font-size:10px; color:#555; font-weight:bold;"># ' + (index + 1) + '</span> ';
+            html += '<strong>' + item.item_code + '</strong><br>';
+            html += '<small style="color:#666;">' + item.item_name + '</small>';
+            html += '</td>';
+
             html += '<td class="po-qty">' + qty + '</td>';
             html += '<td class="current-alloc">' + allocated + '</td>';
             html += '<td class="available-qty" data-poitem="' + poItemId + '">' + available + '</td>';
@@ -726,10 +752,10 @@ $(document).ready(function() {
                     var locId = b.location_id;
                     var existingQty = (existing[poItemId] && existing[poItemId][locId]) ? parseInt(existing[poItemId][locId]) : 0;
 
-                    html += '<td>';
+                    html += '<td class="branch-cell" data-locid="' + locId + '">';
                     html += '<input type="number" name="alloc[' + poItemId + '][' + locId + ']" class="alloc-input" ';
                     html += 'value="' + existingQty + '" min="0" max="' + available + '" ';
-                    html += 'data-poitem="' + poItemId + '" data-loc="' + locId + '" style="width:60px;">';
+                    html += 'data-poitem="' + poItemId + '" data-loc="' + locId + '">';
                     html += '</td>';
                 });
             });
@@ -740,41 +766,59 @@ $(document).ready(function() {
         html += '</tbody></table></div>';
         $('#modalBody').html(html);
 
-        // ---- Real-time available update ----
-        updateAvailable(); // initial
+        // ---- Live Dynamic Item Search Handler ----
+        $('#modalItemSearch').on('keyup', function() {
+            var term = $(this).val().toLowerCase().trim();$('#allocationGrid tbody tr').each(function() {
+                var text = $(this).data('searchtext');
+                if (!term || text.includes(term)) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+        });
+
+        // ---- Live Branch Column Filter Handler ----
+        $('#modalBranchFilter').on('change', function() {
+            var selectedLoc = $(this).val();
+            if (!selectedLoc) {
+                $('#allocationGrid th, #allocationGrid td').show();
+            } else {
+                $('#allocationGrid .branch-col-header, #allocationGrid .branch-cell').hide();
+                $('#allocationGrid th[data-locid="' + selectedLoc + '"], #allocationGrid td.branch-cell[data-locid="' + selectedLoc + '"]').show();
+            }
+        });
+
+        updateAvailable();
 
         $('.alloc-input').on('input', function() {
             updateAvailable();
         });
 
         function updateAvailable() {
-            // For each po_item_id, sum all inputs and update available cell
-            var items = {};
+            var itemsMap = {};
             $('.alloc-input').each(function() {
                 var poItemId = $(this).data('poitem');
                 var val = parseInt($(this).val()) || 0;
-                if (!items[poItemId]) items[poItemId] = 0;
-                items[poItemId] += val;
+                if (!itemsMap[poItemId]) itemsMap[poItemId] = 0;
+                itemsMap[poItemId] += val;
             });
 
-            // Update available cell for each item
             $('.available-qty').each(function() {
                 var poItemId = $(this).data('poitem');
                 var poQty = parseInt($(this).closest('tr').find('.po-qty').text()) || 0;
-                var totalAlloc = items[poItemId] || 0;
+                var totalAlloc = itemsMap[poItemId] || 0;
                 var available = poQty - totalAlloc;
                 $(this).text(available);
-                // Update max attribute on all inputs for this item
+
                 $('.alloc-input[data-poitem="' + poItemId + '"]').each(function() {
                     var currentVal = parseInt($(this).val()) || 0;
-                    var newMax = Math.max(0, available + currentVal); // because we can reduce existing
+                    var newMax = Math.max(0, available + currentVal);
                     $(this).attr('max', newMax);
-                    // If current value exceeds max, reduce it
-                    if (parseInt($(this).val()) > newMax) {
-                        $(this).val(newMax);
+                    if (parseInt($(this).val()) > newMax) {$(this).val(newMax);
                     }
                 });
-                // Color coding for available
+
                 if (available < 0) {
                     $(this).addClass('over-allocated');
                 } else {
@@ -794,7 +838,6 @@ $(document).ready(function() {
 
     // ---- Save Allocations: Open Password Modal ----
     $('#saveAllocBtn').on('click', function() {
-        // Validate that no available is negative
         var hasError = false;
         $('.available-qty').each(function() {
             if (parseInt($(this).text()) < 0) hasError = true;
@@ -804,7 +847,6 @@ $(document).ready(function() {
             return;
         }
 
-        // Open password modal
         $('#passwordModal').css('display', 'flex');
         $('#modalPassword').val('');
         $('#passwordModalError').text('');
@@ -818,7 +860,6 @@ $(document).ready(function() {
             return;
         }
 
-        // Gather allocation data
         var allocData = {};
         $('.alloc-input').each(function() {
             var poItemId = $(this).data('poitem');
@@ -847,7 +888,6 @@ $(document).ready(function() {
                     alert(res.message);
                     closePasswordModal();
                     closeModal();
-                    // Refresh PO list
                     loadPOList(currentPage);
                 } else {
                     $('#passwordModalError').text(res.message);

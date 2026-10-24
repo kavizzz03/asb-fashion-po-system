@@ -955,4 +955,4 @@ if (file_exists(ROOT_PATH . 'includes/sidebar.php')) include ROOT_PATH . 'includ
 
 <?php if (file_exists(ROOT_PATH . 'includes/footer.php')) include ROOT_PATH . 'includes/footer.php'; ?>
 </body>
-</html>
+</html> 
