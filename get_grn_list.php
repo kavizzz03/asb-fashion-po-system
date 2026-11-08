@@ -3,6 +3,13 @@ if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
 
+if (!isLoggedIn()) {
+    header('Content-Type: application/json');
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized. Please log in.']);
+    exit;
+}
+
 header('Content-Type: application/json');
 
 $po_id = isset($_GET['po_id']) ? (int)$_GET['po_id'] : 0;

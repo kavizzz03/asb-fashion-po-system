@@ -10,6 +10,7 @@ if (!defined('ROOT_PATH')) {
 
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 // Resource Limits & High-Capacity Optimization (150+ Items)
 ini_set('display_errors', 1);

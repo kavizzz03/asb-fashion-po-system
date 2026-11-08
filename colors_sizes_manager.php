@@ -1,5 +1,9 @@
 <?php
 if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
+require_once ROOT_PATH . 'config/database.php';
+require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
+if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 
 $page_title = 'ASB Fashion | Colors & Sizes Manager';
 $page = 'colors_sizes';
@@ -322,14 +326,7 @@ if ($action) {
 if (file_exists(ROOT_PATH . 'includes/header.php')) include ROOT_PATH . 'includes/header.php';
 if (file_exists(ROOT_PATH . 'includes/sidebar.php')) include ROOT_PATH . 'includes/sidebar.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $page_title; ?></title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
+<style>
         body { background-color: #fcfcfc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; }
         .asb-header-title { color: #b71c1c; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-left: 5px solid #d32f2f; padding-left: 15px; margin-bottom: 25px; }
 
@@ -954,5 +951,3 @@ if (file_exists(ROOT_PATH . 'includes/sidebar.php')) include ROOT_PATH . 'includ
 </script>
 
 <?php if (file_exists(ROOT_PATH . 'includes/footer.php')) include ROOT_PATH . 'includes/footer.php'; ?>
-</body>
-</html> 

@@ -2,6 +2,7 @@
 if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 $page_title = 'ASB Fashion | Item Receiving Dashboard';
 $page = 'receiving';
@@ -265,10 +266,10 @@ include ROOT_PATH . 'includes/sidebar.php';
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($pos_list as $po):$stLower = strtolower($po['status']);$badgeClass = 'asb-badge-pending';
-                                if ($stLower == 'received')$badgeClass = 'asb-badge-received';
-                                elseif ($stLower == 'completed')$badgeClass = 'asb-badge-completed';
-                                elseif ($stLower == 'cancelled')$badgeClass = 'asb-badge-cancelled';
+                            <?php foreach ($pos_list as $po): $stLower = strtolower($po['status']); $badgeClass = 'asb-badge-pending';
+                                if ($stLower == 'received') $badgeClass = 'asb-badge-received';
+                                elseif ($stLower == 'completed') $badgeClass = 'asb-badge-completed';
+                                elseif ($stLower == 'cancelled') $badgeClass = 'asb-badge-cancelled';
 
                                 $hasGrn = !empty($po['latest_grn_id']);
                             ?>
@@ -288,7 +289,7 @@ include ROOT_PATH . 'includes/sidebar.php';
                                             <?php endif; ?>
                                             
                                             <button class="btn-asb-action" style="background: #1976d2; padding: 6px 12px; font-size: 12px;" onclick="viewGrnHistory(<?= $po['po_id']; ?>, '<?= addslashes($po['po_number']); ?>')">📜 GRN History</button>
-                                            <button class="btn-asb-action" style="padding: 7px 14px; font-size: 13px;" onclick="openGrnModal(<?= $po['po_id']; ?>, '<?=$po['po_number']; ?>', '<?= htmlspecialchars($po['supplier_name'] ?? 'Unknown'); ?>', '<?= htmlspecialchars($po['attention'] ?? '—'); ?>')">📥 Receive Delivery</button>
+                                            <button class="btn-asb-action" style="padding: 7px 14px; font-size: 13px;" onclick="openGrnModal(<?= $po['po_id']; ?>, '<?= $po['po_number']; ?>', '<?= htmlspecialchars($po['supplier_name'] ?? 'Unknown'); ?>', '<?= htmlspecialchars($po['attention'] ?? '—'); ?>')">📥 Receive Delivery</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -300,9 +301,9 @@ include ROOT_PATH . 'includes/sidebar.php';
                 <?php if ($total_pages > 1): ?>
                     <div style="padding:15px 24px; background:#f9f9f9; border-top:1px solid #eee; display:flex; justify-content:center; align-items:center; gap:5px; flex-wrap:wrap;">
                         <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                            <?php if ($i == 1 || $i ==$total_pages || abs($i -$current_page) <= 2): ?>
+                            <?php if ($i == 1 || $i == $total_pages || abs($i - $current_page) <= 2): ?>
                                 <a href="?page_num=<?= $i ?>&search=<?= urlencode($search_filter) ?>&status_filter=<?= urlencode($status_filter) ?>&date_filter=<?= urlencode($date_filter) ?>" class="btn-asb-action" style="background:<?= $i==$current_page?'#b71c1c':'#eee'; ?>; color:<?= $i==$current_page?'#fff':'#333'; ?>; padding:6px 12px; font-size:13px; box-shadow:none;"><?= $i ?></a>
-                            <?php elseif (abs($i -$current_page) == 3): ?>
+                            <?php elseif (abs($i - $current_page) == 3): ?>
                                 <span style="padding:0 5px; color:#888;">...</span>
                             <?php endif; ?>
                         <?php endfor; ?>
@@ -337,7 +338,7 @@ include ROOT_PATH . 'includes/sidebar.php';
                 <label style="font-weight:700; margin-bottom:6px; display:block; font-size:13px; color:#b71c1c;">Target Floor / Department Section *</label>
                 <select name="floor_id" class="asb-input" required style="font-weight:600; color:#333;">
                     <option value="">-- Select Destination Floor (Ladies, Gents, Baby, Cosmetic, Return, etc.) --</option>
-                    <?php foreach ($floors_list as$floor): ?>
+                    <?php foreach ($floors_list as $floor): ?>
                         <option value="<?= $floor['floor_id']; ?>"><?= htmlspecialchars($floor['floor_name']); ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -477,9 +478,9 @@ function renderModalTable(items) {
             <td style="font-weight:700; color: ${remaining > 0 ? '#d32f2f' : '#2e7d32'};">${remaining}</td>
             <td>
                 <input type="number" name="receive_qty[${item.po_item_id}]" 
-                       class="asb-input" value="${remaining}" 
-                       min="0" max="${remaining}" 
-                       style="width:110px; padding:6px 10px; text-align:center; font-weight:bold; color:#b71c1c;" ${remaining === 0 ? 'disabled' : ''}>
+                        class="asb-input" value="0" 
+                        min="0" max="${remaining}" 
+                        style="width:110px; padding:6px 10px; text-align:center; font-weight:bold; color:#b71c1c;" ${remaining === 0 ? 'disabled' : ''}>
             </td>
         </tr>`;
         tbody.innerHTML += row;

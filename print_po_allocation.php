@@ -2,6 +2,7 @@
 if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 $conn = getConnection();
 
@@ -218,7 +219,7 @@ foreach ($items_data as $item) {
             white-space: nowrap;
             font-size: 7pt;
             font-weight: 500;
-            color: var(--text-main);
+            color: #ffffff; /* Updated to white */
             letter-spacing: 0.2px;
         }
         
@@ -285,6 +286,7 @@ foreach ($items_data as $item) {
             /* High contrast adjustments for Black & White laser printing */
             table, th, td { border-color: #333 !important; }
             th { background: #2c3e50 !important; color: #fff !important; }
+            th .vertical-header { color: #ffffff !important; }
             .company-group-th { background: #e2e8f0 !important; color: #000 !important; }
             .company-total-th { background: #cbd5e0 !important; color: #000 !important; }
             .totals-row { background: #cbd5e0 !important; color: #000 !important; }
@@ -374,7 +376,7 @@ foreach ($items_data as $item) {
                         <?php foreach ($companyIds as $cid): ?>
                             <?php $comp = $companyMap[$cid]; ?>
                             <?php foreach ($comp['branches'] as $b): ?>
-                                <th style="background: #ffffff; padding: 2px;">
+                                <th style="background: var(--primary-dark); padding: 2px;">
                                     <div class="vertical-header-container">
                                         <span class="vertical-header"><?php echo htmlspecialchars($b['location_name']); ?></span>
                                     </div>

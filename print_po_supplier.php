@@ -5,6 +5,7 @@ if (!defined('ROOT_PATH')) {
 
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 // Sri Lanka / Colombo local time for printed document timestamps
 date_default_timezone_set('Asia/Colombo');

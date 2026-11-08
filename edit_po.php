@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 // Resource Limits & High-Capacity Optimization (Large Datasets & 150+ Matrix Rows)
 ini_set('display_errors', 0);
