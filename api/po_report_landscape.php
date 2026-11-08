@@ -3,6 +3,11 @@ if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
 
+if (!isLoggedIn()) {
+    http_response_code(401);
+    die('Unauthorized. Please log in.');
+}
+
 $po_id = isset($_GET['po_id']) ? (int)$_GET['po_id'] : 0;
 if (!$po_id) die('Invalid PO ID.');
 

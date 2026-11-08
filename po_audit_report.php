@@ -2,6 +2,7 @@
 if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 $page_title = 'ASB Fashion | Date Range Stock & GRN Report';
 $page = 'reports';
@@ -404,12 +405,6 @@ include ROOT_PATH . 'includes/sidebar.php';
 
     <div class="print-doc-footer">
         © <?= date('Y'); ?> ASB Fashion Central Inventory Ledger Matrix System (Landscape Format) • Designed &amp; Developed by Vexel IT by Kavizz
-    </div>
-
-    <!-- Screen Footer -->
-    <div class="asb-footer no-print" style="text-align: center; margin-top: 50px; padding: 25px; color: #6c757d; border-top: 1px solid #e5e7eb; font-size: 13px;">
-        © <?= date('Y'); ?> <strong>ASB Fashion</strong> Inventory Ledger Matrix System. All Rights Reserved.<br>
-        <span style="font-size:11px; margin-top:6px; display:inline-block; color:#adb5bd;">System Designed &amp; Developed by <strong>Vexel IT by Kavizz</strong></span>
     </div>
 </div>
 

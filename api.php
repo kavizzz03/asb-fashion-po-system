@@ -2,6 +2,13 @@
 require_once 'config/database.php';
 require_once 'includes/functions.php';
 
+if (!isLoggedIn()) {
+    header('Content-Type: application/json');
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized. Please log in.']);
+    exit;
+}
+
 $conn = getConnection();
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 header('Content-Type: application/json');

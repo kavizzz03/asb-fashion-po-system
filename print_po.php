@@ -1,6 +1,7 @@
 <?php
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+requireLogin();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['po_id'])) {

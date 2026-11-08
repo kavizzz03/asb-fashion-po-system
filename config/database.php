@@ -1,9 +1,9 @@
 <?php
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_PO', 'po_system');          // main PO database
-define('DB_QC', 'return_qc');          // database containing suppliers
+if (!defined('DB_HOST')) define('DB_HOST', 'localhost');
+if (!defined('DB_USER')) define('DB_USER', 'root');
+if (!defined('DB_PASS')) define('DB_PASS', '');
+if (!defined('DB_PO')) define('DB_PO', 'po_system');          // main PO database
+if (!defined('DB_QC')) define('DB_QC', 'return_qc');          // database containing suppliers
 
 function getConnection() {
     static $conn = null;

@@ -80,14 +80,16 @@ function isAdmin() {
  * Check if current logged-in user is a "received" user (GRN only)
  */
 function isReceivedUser() {
-    return getUserRole() === 'received';
+    $role = strtolower(getUserRole() ?? '');
+    return in_array($role, ['received', 'recevied']);
 }
 
 /**
  * Check if current logged-in user is a standard user
  */
 function isStandardUser() {
-    return getUserRole() === 'user';
+    $role = strtolower(getUserRole() ?? '');
+    return in_array($role, ['user', 'po_users', 'standard']);
 }
 
 /**

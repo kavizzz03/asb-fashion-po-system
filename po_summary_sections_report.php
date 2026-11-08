@@ -1218,8 +1218,6 @@ include ROOT_PATH . 'includes/sidebar.php';
 
 </div><!-- Close container-fluid -->
 
-</div><!-- Close main-content from includes/header.php -->
-</div><!-- Close app-container from includes/header.php -->
 
 <script>
 function prepareAndPrint() {

@@ -1,4 +1,8 @@
 <?php
+if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
+require_once ROOT_PATH . 'config/database.php';
+require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 /**
  * PO Summary Report - ASB Fashion PO System
  * Designed & Developed by Vexel IT (Kavizz)
@@ -353,17 +357,14 @@ $executionTime = microtime(true) - $_SERVER['REQUEST_TIME_FLOAT'];
 $memoryUsage = memory_get_peak_usage(true) / 1024 / 1024;
 
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PO Summary Report - ASB Fashion</title>
-    <link rel="icon" type="image/png" href="logo.png">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
+<?php
+$page_title = 'PO Summary Report - ASB Fashion';
+$page = 'reports';
+include ROOT_PATH . 'includes/header.php';
+?>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
         /* ----- RESET & BASE ----- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -899,10 +900,7 @@ $memoryUsage = memory_get_peak_usage(true) / 1024 / 1024;
             }
         }
     </style>
-</head>
-<body>
-
-<div class="container-fluid">
+<div class="container-fluid" style="margin-top: 10px;">
 
     <!-- ===== HEADER ===== -->
     <h2 class="asb-header-title">
@@ -1194,51 +1192,7 @@ $memoryUsage = memory_get_peak_usage(true) / 1024 / 1024;
         </div>
     <?php endif; ?>
 
-    <!-- ===== FOOTER ===== -->
-    <div class="asb-footer">
-        © <?= date('Y'); ?> <strong>ASB Fashion</strong> Inventory Ledger Matrix System. All Rights Reserved.<br>
-        <span class="sub">System Designed &amp; Developed by <strong>Vexel IT by Kavizz</strong></span>
-        <div style="margin-top:6px; font-size:10px; color:#aaa;">
-            Generated on <?= $currentDate ?> at <?= $currentTime ?> &nbsp;|&nbsp; Sri Lanka (Colombo)
-            <?php if (!empty($search) || !empty($supplierIds) || !empty($deptIds) || !empty($subDeptIds) || !empty($catIds) || !empty($colorIds) || !empty($sizeIds)): ?>
-                <br>Active filters: 
-                <?php 
-                    $filterParts = [];
-                    if (!empty($search)) $filterParts[] = "Search: " . htmlspecialchars($search);
-                    if (!empty($supplierIds)) {
-                        $names = array_column($supplierOptions, 'supplier_name', 'supplier_id');
-                        $selected = array_intersect_key($names, array_flip($supplierIds));
-                        $filterParts[] = "Suppliers: " . implode(', ', array_map('htmlspecialchars', $selected));
-                    }
-                    if (!empty($deptIds)) {
-                        $names = array_column($departments, 'department_name', 'department_id');
-                        $selected = array_intersect_key($names, array_flip($deptIds));
-                        $filterParts[] = "Dept: " . implode(', ', array_map('htmlspecialchars', $selected));
-                    }
-                    if (!empty($subDeptIds)) {
-                        $names = array_column($subDepartments, 'sub_department_name', 'sub_department_id');
-                        $selected = array_intersect_key($names, array_flip($subDeptIds));
-                        $filterParts[] = "Sub: " . implode(', ', array_map('htmlspecialchars', $selected));
-                    }
-                    if (!empty($catIds)) {
-                        $names = array_column($categories, 'category_name', 'category_id');
-                        $selected = array_intersect_key($names, array_flip($catIds));
-                        $filterParts[] = "Cat: " . implode(', ', array_map('htmlspecialchars', $selected));
-                    }
-                    if (!empty($colorIds)) {
-                        $names = array_column($colors, 'color_name', 'color_id');
-                        $selected = array_intersect_key($names, array_flip($colorIds));
-                        $filterParts[] = "Color: " . implode(', ', array_map('htmlspecialchars', $selected));
-                    }
-                    if (!empty($sizeIds)) {
-                        $names = array_column($sizes, 'size_name', 'size_id');
-                        $selected = array_intersect_key($names, array_flip($sizeIds));
-                        $filterParts[] = "Size: " . implode(', ', array_map('htmlspecialchars', $selected));
-                    }
-                    echo implode(' | ', $filterParts);
-                ?>
-            <?php endif; ?>
-        </div>
+    
         <div class="performance-metrics">
             <i class="fas fa-tachometer-alt"></i> 
             <?= number_format($executionTime, 2) ?>s &nbsp;|&nbsp;
@@ -1381,5 +1335,4 @@ function exportCSV() {
     window.location.href = url.toString();
 }
 </script>
-</body>
-</html>
+<?php include ROOT_PATH . 'includes/footer.php'; ?>

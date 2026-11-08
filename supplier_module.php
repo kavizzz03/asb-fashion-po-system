@@ -1,4 +1,8 @@
 <?php
+if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
+require_once ROOT_PATH . 'config/database.php';
+require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 // 1. DATABASE CONFIGURATIONS (Dual-DB Setup)
 $host    = '127.0.0.1';
 $user    = 'root'; 
@@ -120,17 +124,15 @@ $stmt->execute($execParams);
 $suppliers = $stmt->fetchAll();
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASB Group · Supplier Management</title>
-    <link rel="icon" type="image/png" href="logo.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
+
+<?php
+$page_title = 'ASB Group · Supplier Management';
+$page = 'suppliers';
+include ROOT_PATH . 'includes/header.php';
+?>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap" rel="stylesheet">
+<style>
         body { font-family: 'Inter', sans-serif; background: #fef2f2; }
         .card { background: white; border-radius: 1.5rem; box-shadow: 0 8px 30px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.02); border: 1px solid #fecaca; }
         .btn-primary { background: #b91c1c; color: white; transition: all 0.15s; }
@@ -341,35 +343,25 @@ $suppliers = $stmt->fetchAll();
             @page { size: A5 portrait; margin: 0; }
         }
     </style>
-</head>
-<body>
 
-    <!-- HEADER -->
-    <header class="bg-gradient-to-r from-red-700 to-red-800 border-b border-red-900/40 sticky top-0 z-40 no-print shadow-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex flex-wrap items-center justify-between py-3 gap-3">
-                <div class="flex items-center gap-3">
-                    <div class="h-10 w-10 rounded-xl bg-white text-red-700 flex items-center justify-center font-black text-lg shadow-sm">ASB</div>
-                    <div>
-                        <h1 class="text-lg font-extrabold tracking-tight text-white leading-none">Supplier Control</h1>
-                        <p class="text-[11px] font-medium text-red-100">Enterprise Quality · Dual DB Sync</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="openModal('add')" class="btn-primary text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 bg-white text-red-700 hover:bg-red-50 border border-red-200">
-                        <i class="fas fa-plus-circle"></i> Register Supplier
-                    </button>
-                    <!-- BLANK FORM PRINT BUTTON -->
-                    <button onclick="printEmptyForm()" class="btn-outline text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-white border-white/40 hover:bg-white/10">
-                        <i class="fas fa-print"></i> Blank Form
-                    </button>
-                    <a href="dashboard.php" class="btn-outline text-sm font-semibold px-4 py-2 rounded-xl flex items-center gap-2 text-white border-white/40 hover:bg-white/10 transition">
-                        <i class="fas fa-tachometer-alt"></i> Dashboard
-                    </a>
-                </div>
-            </div>
-        </div>
-    </header>
+<!-- Action Sub-Bar -->
+<div class="no-print" style="margin-bottom: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: white; padding: 16px 20px; border-radius: 18px; border: 1px solid #fecaca; box-shadow: 0 4px 14px rgba(185,28,28,0.04);">
+    <div>
+        <h2 style="color: #b91c1c; font-weight: 800; font-size: 1.25rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-truck"></i> Supplier Management Center
+        </h2>
+        <p style="color: #7a6a6d; font-size: 13px; margin: 2px 0 0 0;">Enterprise Quality · Dual DB Synchronization</p>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <button onclick="openModal('add')" class="btn-save" style="cursor: pointer;">
+            <i class="fas fa-plus-circle"></i> Register Supplier
+        </button>
+        <button onclick="printEmptyForm()" class="btn-cancel" style="cursor: pointer;">
+            <i class="fas fa-print"></i> Blank Form
+        </button>
+    </div>
+</div>
+
 
     <!-- MAIN BODY -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 no-print">
@@ -710,5 +702,4 @@ $suppliers = $stmt->fetchAll();
             if (e.target === modal) closeModal();
         });
     </script>
-</body>
-</html>
+<?php include ROOT_PATH . 'includes/footer.php'; ?>

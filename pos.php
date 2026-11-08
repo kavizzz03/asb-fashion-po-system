@@ -7,6 +7,7 @@ if (!defined('ROOT_PATH')) {
 // Include database and functions
 require_once ROOT_PATH . 'config/database.php';
 require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 
 $page_title = 'ASB Fashion | Purchase Order Operations Control';
 $page = 'pos';

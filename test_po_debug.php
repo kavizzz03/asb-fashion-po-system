@@ -1,4 +1,8 @@
 <?php
+if (!defined('ROOT_PATH')) define('ROOT_PATH', __DIR__ . '/');
+require_once ROOT_PATH . 'config/database.php';
+require_once ROOT_PATH . 'includes/functions.php';
+requireLogin();
 // test_po_debug.php - Direct PO creation test
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
